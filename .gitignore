@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Maya
+*.mel.tmp
+*.ma.swatches
+mayaSwatches/
+incrementalSave/
+workspace.mel
+*.mayaSwatches
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Local, generated or temporary
+/tmp/
+/.spike/
+/docs/_site/
+/examples/generated/
+*.log
