@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/icon.svg" width="96" height="96" alt="RigFlow icon">
+  <img src="assets/logo.png" width="360" alt="RigFlow logo">
 </p>
 
-<h1 align="center">RigFlow — Animation Transfer for Maya</h1>
+<h1 align="center">Animation Transfer for Maya</h1>
 
 <p align="center">
   Transfer animation between characters with different proportions, skeletons and naming conventions.<br>

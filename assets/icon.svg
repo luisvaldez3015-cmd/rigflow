@@ -1,13 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#33404f"/>
-      <stop offset="1" stop-color="#1f2831"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="14" fill="url(#tile)"/>
-  <path d="M14 46 C22 18, 40 52, 50 18" fill="none" stroke="#5b9bd5" stroke-width="5" stroke-linecap="round"/>
-  <polygon points="50,12 56,22 44,22" fill="#9ccbf0"/>
-  <circle cx="14" cy="46" r="6" fill="#e8eef4" stroke="#1f2831" stroke-width="1.5"/>
-  <circle cx="31" cy="36" r="4.5" fill="#e8eef4" stroke="#1f2831" stroke-width="1.5"/>
+  <!-- RigFlow joint glyph: the "i" of the wordmark. Geometry mirrors rigflow/ui/brand.py (h = 56, w = 14, origin 32,4). -->
+  <g fill="#23b7db">
+    <circle cx="32" cy="9.04" r="5.04"/>
+    <path d="M32 16.04 L39 20.8 L32.84 52.16 L31.16 52.16 L25 20.8 Z"/>
+    <circle cx="32" cy="56.36" r="3.64"/>
+  </g>
 </svg>
