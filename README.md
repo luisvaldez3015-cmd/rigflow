@@ -18,12 +18,13 @@
 
 ## Screenshots
 
-| Setup | Match |
-|-------|-------|
-| ![Setup step](docs/images/setup-empty.png) | ![Match step inside Maya](docs/images/match.png) |
+| Setup | Match | Transfer |
+|-------|-------|----------|
+| ![Setup step](docs/images/setup-empty.png) | ![Match step inside Maya](docs/images/match.png) | ![Transfer step inside Maya](docs/images/transfer.png) |
 
-Real captures: the Match step runs inside Maya 2024 with the demo scene
-(source skeleton on the left, destination mannequin on the right).
+Real captures from Maya 2024 with the demo scene: Match shows the source
+skeleton (Mesh A) and the destination mannequin (Mesh B); Transfer shows the
+live HumanIK preview at frame 24 before baking.
 
 ## What RigFlow does
 
