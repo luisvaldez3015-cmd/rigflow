@@ -66,6 +66,37 @@ class ControllerBase(QtCore.QObject):
         super().__init__(parent)
         self.session = session if session is not None else Session()
         self._depth = 0
+        self._selected_pairs = {}
+        self._source_labels = {}
+
+    def begin_selection(self, clip_id):
+        """Start a fresh Match selection lifetime."""
+        self.clear_selected_pair(clip_id)
+
+    def remember_selected(self, clip_id, joint, destination=False):
+        pair = list(self._selected_pairs.get(clip_id, (None, None)))
+        pair[int(destination)] = joint
+        self._selected_pairs[clip_id] = tuple(pair)
+
+    def clear_selected_pair(self, clip_id):
+        self._selected_pairs.pop(clip_id, None)
+
+    def selected_pair(self, clip_id):
+        """Return remembered source/destination joints selected in Maya."""
+        return self._selected_pairs.get(clip_id, (None, None))
+
+    def selection_role(self, clip_id, source=None, destination=None):
+        """Resolve A's role first, then B's, independently of the table selection."""
+        clip = self._clip(clip_id)
+        rig = self.session.rig
+        if clip.source_skeleton is None:
+            return rig.labeling.role_of(destination) if rig and rig.labeling else None
+        cached = self._source_labels.get(clip_id)
+        if cached is None or cached[0] is not clip.source_skeleton:
+            cached = (clip.source_skeleton, label_skeleton(clip.source_skeleton))
+            self._source_labels[clip_id] = cached
+        role = cached[1].role_of(source)
+        return role or (rig.labeling.role_of(destination) if rig and rig.labeling else None)
 
     def _clip(self, clip_id):
         clip = self.session.get_clip(clip_id)
@@ -104,7 +135,8 @@ class ControllerBase(QtCore.QObject):
         """Assign an existing source/destination pair to the selected role."""
         clip = self._clip(clip_id)
         mapping = self._mapping(clip_id)
-        if source not in clip.source_skeleton or destination not in self.session.rig.skeleton:
+        if ((source is not None and source not in clip.source_skeleton) or
+                (destination is not None and destination not in self.session.rig.skeleton)):
             raise MappingError("Select a joint from each hierarchy first.")
         if self.stop_preview(clip_id) is False:
             return None
@@ -277,6 +309,10 @@ class ControllerBase(QtCore.QObject):
         """Release a modelPanel owned by a ViewportPanel."""
         return None
 
+    def frame_viewport(self, panel, nodes):
+        """Frame once after the embedded panel receives its final size."""
+        return None
+
     def create_demo_scene(self):
         """Build the sample characters and load them as destination (Maya only)."""
         self.session.status("The demo scene can only be created inside Maya.", "warning")
@@ -299,6 +335,41 @@ class Controller(ControllerBase):
         self._previews = {}
         self._playback_state = None
         self._viewport_cameras = {}
+        self._last_selection = {}
+        self._selection_skeletons = {}
+
+    @action(default=lambda: (None, None))
+    def selected_pair(self, clip_id):
+        clip = self._clip(clip_id)
+        rig = self.session.rig
+        skeletons = (clip.source_skeleton, rig.skeleton if rig else None)
+        if self._selection_skeletons.get(clip_id) != skeletons:
+            self._selected_pairs.pop(clip_id, None)
+            self._selection_skeletons[clip_id] = skeletons
+            self._last_selection.pop(clip_id, None)
+        selection = tuple(self._service("inspector").selection())
+        if selection != self._last_selection.get(clip_id):
+            self._last_selection[clip_id] = selection
+            for node in selection:
+                for side, skeleton in enumerate(skeletons):
+                    if skeleton is None:
+                        continue
+                    # Inspector returns DAG paths; trees store the skeleton's canonical names.
+                    matches = [joint for joint in skeleton if joint == node or
+                               joint.rsplit("|", 1)[-1] == node.rsplit("|", 1)[-1]]
+                    if len(matches) == 1:
+                        self.remember_selected(clip_id, matches[0], bool(side))
+        return super().selected_pair(clip_id)
+
+    def begin_selection(self, clip_id):
+        self._selected_pairs.pop(clip_id, None)
+        self._last_selection.pop(clip_id, None)
+        self._selection_skeletons.pop(clip_id, None)
+
+    def clear_selected_pair(self, clip_id):
+        super().clear_selected_pair(clip_id)
+        # Do not reconsume the same Maya selection on the next timer tick.
+        self._last_selection[clip_id] = tuple(self._service("inspector").selection())
 
     @staticmethod
     def _service(name):
@@ -500,7 +571,7 @@ class Controller(ControllerBase):
     def preview_message(self, clip_id):
         backend = self._previews.get(clip_id)
         if backend is not None and backend.name == "matrix":
-            return "Source playback only · Matrix has no live destination preview. Confirm to bake the transfer."
+            return "Source playback only · Matrix has no live destination preview. Transfer to bake the animation."
         return super().preview_message(clip_id)
 
     def viewport_nodes(self, clip_id, destination=False):
@@ -615,6 +686,10 @@ class Controller(ControllerBase):
     @action()
     def viewport_container(self, panel):
         return self._service("viewport").panel_container(panel)
+
+    @action()
+    def frame_viewport(self, panel, nodes):
+        return self._service("viewport").frame_nodes(panel, nodes)
 
     @action("Building demo scene…")
     def create_demo_scene(self):

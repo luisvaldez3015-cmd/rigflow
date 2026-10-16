@@ -42,7 +42,7 @@ def show(dev_reload=False):
         # Dependency-first order prevents views retaining old widget classes.
         for prefix in ("rigflow.ui.theme", "rigflow.ui.controller", "rigflow.ui.widgets.",
                        "rigflow.ui.help_menu", "rigflow.ui.matching_view", "rigflow.ui.review_view",
-                       "rigflow.ui.fake_controller", "rigflow.ui.main_window"):
+                       "rigflow.ui.fake_controller", "rigflow.ui.setup_view", "rigflow.ui.main_window"):
             for name in names:
                 if name == prefix or (prefix.endswith(".") and name.startswith(prefix)):
                     importlib.reload(sys.modules[name])

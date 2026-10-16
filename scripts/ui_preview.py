@@ -12,16 +12,20 @@ sys.path.insert(0, str(ROOT))
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--screenshot", metavar="DIR", help="save four offscreen PNGs and exit")
+    parser.add_argument("--screenshot", metavar="DIR", help="save five offscreen PNGs and exit")
+    parser.add_argument("--width", type=int, default=1160)
+    parser.add_argument("--height", type=int, default=900)
     args = parser.parse_args(argv)
     if args.screenshot:
         os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    from rigflow.ui.qt import QtCore, QtWidgets
+    from rigflow.ui.qt import QtCore, QtWidgets, ensure_application_fonts
     from rigflow.ui.fake_controller import FakeController
     from rigflow.ui.main_window import MainWindow
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
+    ensure_application_fonts()
     controller = FakeController()
     window = MainWindow(controller)
+    window.resize(args.width, args.height)
     window.show()
     app.processEvents()
     if not args.screenshot:
@@ -45,19 +49,25 @@ def main(argv=None):
             raise RuntimeError("Could not save " + str(path))
         print(str(path))
 
-    capture("01_main_empty")
+    capture("01_setup_empty")
     controller.set_model_from_selection()
     controller.set_rig_from_selection()
     clip = controller.add_animation_from_file("Walk_Forward.fbx")
     controller.add_animation_from_file("Idle_Breathing.fbx")
-    capture("02_main_populated")
-    window.open_matching(clip.clip_id)
+    controller.session.set_active_clip(clip.clip_id)
+    window.validate_active()
+    capture("02_setup_populated")
+    window.open_match(clip.clip_id)
     # Show an intentional manual confirmation alongside automatic matches.
     match = clip.mapping.matches["Hips"]
     controller.set_manual_match(clip.clip_id, match.role, match.source, match.destination)
-    capture("03_matching")
-    window.open_review(clip.clip_id)
-    capture("04_review")
+    capture("03_match")
+    window.open_transfer(clip.clip_id)
+    window.transfer_view._set_frame(24)
+    capture("04_transfer")
+    window.open_match(clip.clip_id)
+    window.match_view.set_details_expanded(True)
+    capture("05_match_details_expanded")
     window.close()
     window.deleteLater()
     app.processEvents()

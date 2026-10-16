@@ -57,7 +57,7 @@ def _log(step, **data):
 
 def _grab(window, name):
     from maya import cmds
-    from rigflow.ui.qt import QtWidgets
+    from rigflow.ui.qt import QtCore, QtWidgets
 
     # Let embedded model panels paint before capturing the screen pixels.
     _pump(0.5)
@@ -67,7 +67,13 @@ def _grab(window, name):
     path = os.path.join(OUT_DIR, name + ".png")
     try:
         screen = QtWidgets.QApplication.primaryScreen()
-        pixmap = screen.grabWindow(int(window.window().winId()))
+        # Capture the desktop rectangle: grabbing Qt's window handle can return
+        # its backing store without Maya's native OpenGL child windows.
+        window.window().raise_()
+        window.window().activateWindow()
+        _pump(0.3)
+        origin = window.window().mapToGlobal(QtCore.QPoint(0, 0))
+        pixmap = screen.grabWindow(0, origin.x(), origin.y(), window.window().width(), window.window().height())
         if pixmap.isNull():
             pixmap = window.grab()
     except Exception:  # pragma: no cover - fallback for odd window states
@@ -88,6 +94,11 @@ def _viewport_diagnostics(window, tag):
             "title": vp.header.text(), "visible": vp.isVisible(), "panel": vp.panel,
             "attempted": vp._attempted, "placeholder_visible": vp.placeholder.isVisible(),
             "isolate": list(vp.isolate), "size": [vp.host.width(), vp.host.height()],
+            "host_layout": [
+                {"name": vp.host_layout.itemAt(i).widget().objectName(),
+                 "visible": vp.host_layout.itemAt(i).widget().isVisible(),
+                 "size": [vp.host_layout.itemAt(i).widget().width(), vp.host_layout.itemAt(i).widget().height()]}
+                for i in range(vp.host_layout.count()) if vp.host_layout.itemAt(i).widget()],
         }
         if vp.panel and cmds.modelPanel(vp.panel, exists=True):
             camera = cmds.modelPanel(vp.panel, q=True, camera=True)
@@ -109,6 +120,8 @@ def _viewport_diagnostics(window, tag):
                 entry["playblast_error"] = str(exc)
         entries.append(entry)
     REPORT.setdefault("viewports", {})[tag] = entries
+    REPORT["checks"][tag + "_viewports_embedded"] = all(e["panel"] for e in entries if e["visible"])
+    REPORT["checks"][tag + "_hidden_viewports_released"] = all(not e["panel"] for e in entries if not e["visible"])
     _log("viewports", tag=tag, count=len(entries))
 
 
@@ -153,14 +166,22 @@ def run():
     REPORT["checks"]["clip_added"] = clip is not None
     if clip is None:
         raise RuntimeError("Clip was not added")
-    report = controller.validate(clip.clip_id)
+    report = window.validate_active()
     REPORT["checks"]["mapping_ok"] = report.ok
     REPORT["checks"]["mapping_summary"] = clip.mapping.summary() if clip.mapping else {}
     _pump(0.3)
     _grab(window, "03_main_clip")
 
-    window.open_matching(clip.clip_id)
+    window.open_match(clip.clip_id)
     _pump(1.0)
+    hand = clip.mapping.matches["LeftHand"]
+    cmds.select([hand.source, hand.destination], replace=True)
+    _pump(0.4)
+    pair = controller.selected_pair(clip.clip_id)
+    REPORT["checks"]["selected_pair"] = list(pair)
+    window.match_view.poll_selection()
+    window.match_view.match_button.click()
+    REPORT["checks"]["manual_match"] = bool(clip.mapping.matches["LeftHand"].manual)
     _grab(window, "04_matching")
     _viewport_diagnostics(window, "matching")
 
@@ -171,13 +192,12 @@ def run():
     facial_before = key_counts(facial_nodes)
     source_before = key_counts(list(demo.source_joints.values()))
 
-    started = controller.start_preview(clip.clip_id)
-    REPORT["checks"]["preview_started"] = bool(started)
+    window.open_transfer(clip.clip_id)
+    REPORT["checks"]["preview_started"] = bool(window.transfer_view._preview_ready)
     controller.set_frame(24)
     _pump(1.0)
     hips_preview = cmds.xform(demo.destination_joints["pelvis_JNT"], q=True, ws=True, t=True)
     REPORT["checks"]["preview_hips_y_frame24"] = round(hips_preview[1], 3)
-    window.open_review(clip.clip_id)
     _pump(1.0)
     controller.set_frame(24)
     _grab(window, "05_review_preview_f24")
@@ -188,7 +208,7 @@ def run():
         "backend": result.backend, "layer": result.layer, "baked_joints": len(result.baked_joints),
         "verification": result.verification, "warnings": result.warnings,
     }
-    window.show_main()
+    window.show_setup()
     _pump(0.5)
     _grab(window, "06_main_transferred")
 
@@ -227,7 +247,9 @@ def run():
     REPORT["ok"] = all(REPORT["checks"].get(k) for k in (
         "rig_valid", "model_valid", "clip_added", "mapping_ok", "preview_started",
         "facial_untouched", "source_untouched", "jaw_control_drives_jaw", "hips_moved_up",
-        "undo_removed_layer", "redo_restored_layer",
+        "undo_removed_layer", "redo_restored_layer", "manual_match",
+        "matching_viewports_embedded", "matching_hidden_viewports_released",
+        "review_viewports_embedded", "review_hidden_viewports_released",
     ))
 
 

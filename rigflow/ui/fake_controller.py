@@ -52,6 +52,22 @@ class FakeController(ControllerBase):
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(42)
         self._timer.timeout.connect(self._tick)
+        self.scripted_pair = ("mixamorig:LeftHand", "l_wrist_JNT")
+        self._selection_consumed = False
+
+    def begin_selection(self, clip_id):
+        super().clear_selected_pair(clip_id)
+        self._selection_consumed = False
+
+    def selected_pair(self, clip_id):
+        if not self._selection_consumed:
+            self._selected_pairs[clip_id] = self.scripted_pair
+            self._selection_consumed = True
+        return super().selected_pair(clip_id)
+
+    def clear_selected_pair(self, clip_id):
+        super().clear_selected_pair(clip_id)
+        self._selection_consumed = True
 
     @action()
     def set_model_from_selection(self):
@@ -160,7 +176,9 @@ class FakeController(ControllerBase):
         self.stop_preview(clip_id)
         clip = self._clip(clip_id)
         clip.result = {"backend": "demo", "layer": "rigflow_transfer" if to_layer else None,
-                       "frame_range": clip.frame_range, "warnings": []}
+                       "frame_range": clip.frame_range, "warnings": [],
+                       "baked_joints": sorted(clip.mapping.destination_joints_used()),
+                       "verification": {"max_bone_length_error": 0.0, "elapsed_s": 0.12}}
         clip.status = ClipStatus.TRANSFERRED
         self.session.clip_updated(clip_id)
         self.session.status("{} transferred (demo).".format(clip.name), "success")

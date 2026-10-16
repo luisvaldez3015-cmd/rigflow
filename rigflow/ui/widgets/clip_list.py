@@ -3,7 +3,6 @@ from __future__ import annotations
 from rigflow.animation.clip import ClipStatus
 from rigflow.ui.qt import QtCore, QtWidgets, Signal
 from rigflow.ui.widgets.status_badge import StatusBadge
-from rigflow.ui.widgets.empty_state import EmptyState
 from rigflow.ui import theme
 
 
@@ -15,16 +14,14 @@ class ClipList(QtWidgets.QWidget):
     remove_requested = Signal(str)
     replace_requested = Signal(str)
     add_requested = Signal()
+    clip_selected = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        self.empty = EmptyState("Bring in a performance to start matching your characters.",
-                                "Add Animation", self.add_requested.emit, "♫")
-        layout.addWidget(self.empty)
         self.table = QtWidgets.QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Animation", "Source / frames", "Status", "", "Actions"])
+        self.table.setHorizontalHeaderLabels(["Animation", "Convention / range / frames", "Status", "", "Actions"])
         self.table.verticalHeader().hide()
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
@@ -32,22 +29,28 @@ class ClipList(QtWidgets.QWidget):
         self.table.setShowGrid(False)
         self.table.setMinimumHeight(142)
         self.table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
-        for col, width in ((1, 184), (2, 148), (3, 120), (4, 182)):
+        for col, width in ((1, 184), (2, 140), (3, 88), (4, 158)):
             self.table.setColumnWidth(col, width)
         layout.addWidget(self.table)
+        self.table.itemSelectionChanged.connect(self._selected)
         self.set_clips([])
+
+    def _selected(self):
+        item = self.table.item(self.table.currentRow(), 0)
+        if item:
+            self.clip_selected.emit(item.data(QtCore.Qt.UserRole))
 
     def rowCount(self):
         return self.table.rowCount()
 
-    def set_clips(self, clips):
+    def set_clips(self, clips, active_clip_id=None):
+        blocker = QtCore.QSignalBlocker(self.table)
         for row in range(self.table.rowCount()):
             for col in (2, 3, 4):
                 widget = self.table.cellWidget(row, col)
                 if widget:
                     widget.hide()
         self.table.setRowCount(0)
-        self.empty.setVisible(not clips)
         self.table.setVisible(bool(clips))
         self.table.setRowCount(len(clips))
         self.table.setMinimumHeight(min(4, max(1, len(clips))) * 56 + 40)
@@ -64,14 +67,14 @@ class ClipList(QtWidgets.QWidget):
             detail.setToolTip("{} joints · {:g} fps".format(clip.joint_count, clip.fps))
             self.table.setItem(row, 1, detail)
             self.table.setCellWidget(row, 2, StatusBadge(clip.status.label, colors[clip.status]))
-            edit = theme.button("Edit mapping" if clip.mapping else "Map joints", "Inspect and correct the source-to-destination mapping.")
+            edit = theme.button("Match", "Inspect and correct the source-to-destination mapping.")
             edit.clicked.connect(lambda checked=False, cid=clip.clip_id: self.map_requested.emit(cid))
             self.table.setCellWidget(row, 3, self._wrap(edit))
             actions = QtWidgets.QWidget()
             bar = QtWidgets.QHBoxLayout(actions)
             bar.setContentsMargins(4, 4, 4, 4)
             bar.setSpacing(4)
-            review = theme.button("Review", "Preview this animation before transferring it.")
+            review = theme.button("Transfer", "Preview and transfer this animation to the destination.")
             review.setEnabled(clip.mapping is not None)
             review.clicked.connect(lambda checked=False, cid=clip.clip_id: self.review_requested.emit(cid))
             bar.addWidget(review)
@@ -79,8 +82,7 @@ class ClipList(QtWidgets.QWidget):
             more.setFixedWidth(40)
             menu = QtWidgets.QMenu(more)
             for title, signal, tip in (
-                ("Transfer to layer", self.transfer_requested, "Bake animation onto a new destination animation layer."),
-                ("Replace source…", self.replace_requested, "Replace this clip with another file, keeping its list position."),
+                ("Replace…", self.replace_requested, "Replace this clip with another file, keeping its list position."),
                 ("Remove", self.remove_requested, "Remove this clip and its imported source nodes; scene sources are retained."),
             ):
                 action = menu.addAction(title)
@@ -91,6 +93,9 @@ class ClipList(QtWidgets.QWidget):
             more.setMenu(menu)
             bar.addWidget(more)
             self.table.setCellWidget(row, 4, actions)
+            if clip.clip_id == active_clip_id:
+                self.table.selectRow(row)
+        del blocker
 
     @staticmethod
     def _wrap(widget):

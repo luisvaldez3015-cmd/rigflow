@@ -8,9 +8,9 @@ BORDER = "#1f1f1f"
 BORDER_LIGHT = "#4a4a4a"
 TEXT = "#e6e6e6"
 MUTED = "#a0a0a0"
-ACCENT = "#5b9bd5"
-HOVER = "#6fb0ea"
-PRESSED = "#4a86bd"
+ACCENT = "#23b7db"  # RigFlow brand cyan (joint glyph in the logo)
+HOVER = "#4cc8e6"
+PRESSED = "#1a95b3"
 GREEN = "#58b368"
 YELLOW = "#e0b84c"
 RED = "#d9534f"
@@ -35,20 +35,20 @@ def stylesheet():
     QLabel[muted="true"] { color: #a0a0a0; }
     QLabel[heading="true"] { font-size: 13px; font-weight: 600; }
     QLabel#brand { font-size: 24px; font-weight: 600; }
-    QLabel#step { color: #5b9bd5; font-size: 11px; font-weight: 600; }
+    QLabel#step { color: #23b7db; font-size: 11px; font-weight: 600; }
     QPushButton, QToolButton { background: #3d3d3d; border: 1px solid #4a4a4a;
         border-radius: 6px; padding: 7px 12px; min-height: 16px; }
-    QPushButton:hover, QToolButton:hover { background: #484848; border-color: #6fb0ea; }
-    QPushButton:pressed, QToolButton:pressed { background: #303030; border-color: #4a86bd; }
-    QPushButton:focus, QToolButton:focus { border: 1px solid #5b9bd5; }
+    QPushButton:hover, QToolButton:hover { background: #484848; border-color: #4cc8e6; }
+    QPushButton:pressed, QToolButton:pressed { background: #303030; border-color: #1a95b3; }
+    QPushButton:focus, QToolButton:focus { border: 1px solid #23b7db; }
     QPushButton:disabled, QToolButton:disabled { color: #7a7a7a; background: #333333; border-color: #424242; }
-    QPushButton[primary="true"] { background: #5b9bd5; color: #151e26; border-color: #5b9bd5; font-weight: 600; }
-    QPushButton[primary="true"]:hover { background: #6fb0ea; }
-    QPushButton[primary="true"]:pressed { background: #4a86bd; }
+    QPushButton[primary="true"] { background: #23b7db; color: #151e26; border-color: #23b7db; font-weight: 600; }
+    QPushButton[primary="true"]:hover { background: #4cc8e6; }
+    QPushButton[primary="true"]:pressed { background: #1a95b3; }
     QPushButton[primary="true"]:disabled { background: #3d4852; color: #89949d; border-color: #3d4852; }
     QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox { background: #282828; border: 1px solid #4a4a4a;
-        border-radius: 6px; padding: 6px; selection-background-color: #4a86bd; }
-    QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus { border-color: #5b9bd5; }
+        border-radius: 6px; padding: 6px; selection-background-color: #1a95b3; }
+    QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus { border-color: #23b7db; }
     QTreeWidget, QTableWidget, QListWidget { background: #2f2f2f; alternate-background-color: #333333;
         border: 1px solid #4a4a4a; border-radius: 6px; outline: none; selection-background-color: #354b5d; }
     QTreeWidget::item, QListWidget::item { padding: 4px; }
@@ -65,12 +65,12 @@ def stylesheet():
     QMenuBar, QMenu, QStatusBar { background: #2f2f2f; }
     QMenuBar::item:selected, QMenu::item:selected { background: #354b5d; }
     QMenu::item { padding: 7px 24px; }
-    QToolTip { background: #242424; color: #e6e6e6; border: 1px solid #5b9bd5; padding: 6px; }
+    QToolTip { background: #242424; color: #e6e6e6; border: 1px solid #23b7db; padding: 6px; }
     QProgressBar { background: #282828; border: none; border-radius: 3px; max-height: 5px; }
-    QProgressBar::chunk { background: #5b9bd5; border-radius: 3px; }
+    QProgressBar::chunk { background: #23b7db; border-radius: 3px; }
     QSlider::groove:horizontal { height: 4px; background: #242424; border-radius: 2px; }
-    QSlider::sub-page:horizontal { background: #5b9bd5; }
-    QSlider::handle:horizontal { background: #5b9bd5; width: 12px; margin: -4px 0; border-radius: 6px; }
+    QSlider::sub-page:horizontal { background: #23b7db; }
+    QSlider::handle:horizontal { background: #23b7db; width: 12px; margin: -4px 0; border-radius: 6px; }
     QCheckBox { spacing: 6px; }
     """
 

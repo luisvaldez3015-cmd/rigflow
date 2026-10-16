@@ -37,10 +37,6 @@ class ViewportPanel(QtWidgets.QFrame):
         empty_layout = QtWidgets.QVBoxLayout(self.placeholder)
         empty_layout.setSpacing(4)
         empty_layout.addStretch()
-        glyph = theme.label("◇")
-        glyph.setStyleSheet("font-size: 28px; color: #6d7780;")
-        glyph.setAlignment(QtCore.Qt.AlignCenter)
-        empty_layout.addWidget(glyph)
         self.hint = theme.label("Viewport available inside Maya", muted=True)
         self.hint.setAlignment(QtCore.Qt.AlignCenter)
         empty_layout.addWidget(self.hint)
@@ -78,6 +74,7 @@ class ViewportPanel(QtWidgets.QFrame):
             # keep a Python reference; failing to wrap must not destroy the viewport.
             self.placeholder.hide()
             self.embedded = self._wrap_container(panel)
+            QtCore.QTimer.singleShot(0, lambda expected=panel: self._frame_content(expected))
         except Exception as exc:
             self.release()
             self._attempted = True
@@ -92,7 +89,7 @@ class ViewportPanel(QtWidgets.QFrame):
             except ImportError:
                 from shiboken2 import isValid  # type: ignore
             container = getattr(self.controller, "viewport_container", lambda _p: None)(panel) or panel
-            pointer = omui.MQtUtil.findControl(container)
+            pointer = omui.MQtUtil.findLayout(container) or omui.MQtUtil.findControl(container)
             if not pointer:
                 return None
             widget = wrapInstance(int(pointer), QtWidgets.QWidget)
@@ -113,6 +110,10 @@ class ViewportPanel(QtWidgets.QFrame):
         self.panel = None
         self._attempted = False
         self.placeholder.show()
+
+    def _frame_content(self, expected):
+        if self.panel == expected and self.isVisible():
+            self.controller.frame_viewport(expected, self.isolate)
 
     def closeEvent(self, event):
         self.release()
