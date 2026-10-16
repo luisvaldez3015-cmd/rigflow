@@ -2,11 +2,13 @@
 
 RigFlow transfers body animation from one skeleton to another inside Maya,
 even when the two characters have different proportions, joint names and
-hierarchies. The workflow is always the same:
+hierarchies. The interface is a three-step flow:
 
-**Import → Match → Preview → Transfer → keep animating.**
+**1 Setup → 2 Match → 3 Transfer**
 
-## 1. Open RigFlow
+The step indicator in the top-right corner always shows where you are.
+
+## Open RigFlow
 
 Click the **RigFlow** shelf button (see the Installation Guide) or run:
 
@@ -15,97 +17,73 @@ import rigflow
 rigflow.launch()
 ```
 
-The main window has three sections. You can dock it like any Maya panel.
+The window docks like any Maya panel. **Help → Create demo scene** builds two
+sample characters so you can try the whole flow without any files.
 
-## 2. Choose the destination
+## Step 1 · Setup
 
-### A · Model (optional)
+Three slot cards sit at the top:
 
-The destination character's geometry. Select the mesh in Maya and press
-**Use selection**, or drop / browse an `.fbx`, `.ma` or `.mb` file. RigFlow
-reports the mesh count, vertex count and whether it is skinned. Geometry is
-optional: the transfer works on the skeleton. It is useful for the previews
-and to find the rig automatically (press **Use selection** in the Rig section
-with a skinned mesh selected).
+| Card | What it needs | How to fill it |
+|------|---------------|----------------|
+| **Mesh** (optional) | The destination character's geometry | Select the mesh in Maya and press **Use selection**, or **Browse…** / drop an `.fbx` `.ma` `.mb` file |
+| **Rig** (required) | The skeleton that will receive the animation | Select its root joint (or a skinned mesh) and press **Use selection**, or **Browse…** |
+| **Anim** | The source animation | **Add file…** (Mixamo exports, game skeletons, MotionBuilder files) or **From scene…** to pick an animated skeleton already in the scene |
 
-### B · Rig (required)
+Each card shows a status dot and what RigFlow detected: mesh and vertex
+counts, root joint, joint count, naming convention, how many of the 15
+required roles were found, frame range of the clip.
 
-The skeleton that will receive the animation. Select its root joint (or a
-skinned mesh) and press **Use selection**, or import a file. RigFlow shows:
+The big **+** tile in the middle is the fastest way to add an animation:
+click it (or drop a file on it) and choose *From file…* or *From scene…*.
+Once you have animations the area turns into the list; each row shows the
+convention, frame range, status, and the actions **Match**, **Transfer**,
+**Replace** and **Remove**. The small **+** under the list adds more clips;
+each clip keeps its own mapping.
 
-- the root, the joint count and the naming convention it recognised;
-- how many of the 15 required roles it could identify;
-- notes about joints it ignored on purpose (facial, twist, controls).
+Press **Validate**. RigFlow matches the skeletons automatically and tells you
+the result next to the button: green *Ready: n roles matched*, yellow *n to
+review*, or a red error with a hint. **Next: Match ›** opens step 2.
 
-A green **Validated** badge means the rig is ready. **Needs attention** lists
-the roles it could not find; you can still fix them by hand in the matching
-workspace.
+## Step 2 · Match ("New animation")
 
-## 3. Add an animation
+Two viewports: **Mesh A** is the source character, **Mesh B** is your
+destination. Both show their skeletons; Maya's own selection highlight marks
+the joints you click.
 
-### C · Animation
+- To correct a correspondence: click a joint in Mesh A, click the matching
+  joint in Mesh B (the *Selection* readout shows A and B), press **Match**.
+  The pair becomes a manual match and the counters update.
+- **Unmatch** drops the pair of the selected joint (the role turns red if it
+  is required, gray if it is optional).
+- **Auto-match** recomputes everything automatically but keeps your manual
+  corrections.
+- **Details** expands the full table (status, role, A joint, B joint,
+  confidence, manual, exclude) with the two joint hierarchies, **Save / Load
+  preset…** and **Reset to automatic**.
 
-- **Add Animation** imports an `.fbx` / `.ma` / `.mb` file (Mixamo exports,
-  game skeletons, MotionBuilder files...). The file goes into its own
-  namespace so it never clashes with your character.
-- **From scene…** uses an animated skeleton that is already in the scene.
+The line under the viewports shows the validation result. **Next: Transfer ›**
+is enabled as soon as there are no errors. See the Skeleton Matching Guide
+for how the automatic matching decides.
 
-Each clip appears in the list with its naming convention, frame range,
-frame count and status:
+## Step 3 · Transfer
 
-| Status | Meaning |
-|--------|---------|
-| Imported | Loaded, no destination rig yet |
-| Ready to transfer | Mapping complete, no errors |
-| Needs review | Mapping has red rows or validation errors |
-| Previewing | Live retarget connected, nothing baked |
-| Transferred | Baked onto the destination |
+The large viewport shows both characters with the live retarget connected:
+the destination follows the source as you **Play**, **Pause**, **Stop** or
+scrub the timeline. Nothing is written yet.
 
-You can keep adding clips; each one keeps its own mapping. Use the row
-actions to **Edit mapping**, **Review**, **Transfer**, **Replace** the source
-file or **Remove** the clip (which also deletes its imported nodes).
-
-## 4. Match the skeletons
-
-Adding a clip opens the matching workspace automatically.
-
-- Left and right panels preview the source and the destination.
-- The **Source hierarchy** and **Destination hierarchy** trees show the
-  joints. Filter boxes help with big skeletons.
-- The **Joint mapping** table has one row per role: status, source joint,
-  destination joint, confidence, manual marker and an *Exclude* checkbox.
-  Hover a row for the reasoning behind the match.
-- Selecting a row highlights both joints and draws a link between them.
-
-Green rows are confident, yellow rows deserve a look, red rows block the
-transfer, gray rows are optional roles one skeleton does not have.
-
-To correct a row: select it, click the right joint in each tree, press
-**Link selected**. The row becomes green and *manual*. **Auto-match**
-recomputes everything else but keeps your corrections; **Reset to automatic**
-discards them. **Save preset…** stores the mapping as `.rigflow.json` for the
-next clip between the same two characters.
-
-The strip under the table shows counts per status and the validation result.
-**Review Animation** is enabled as soon as there are no errors.
-See the Skeleton Matching Guide for the details of how matching works.
-
-## 5. Review
-
-The review view connects the live retarget (HumanIK) so the destination
-follows the source as you **Play**, **Pause**, **Stop** or scrub the
-timeline. Nothing is written yet. Warnings from the mapping are listed under
-the viewport.
-
-- **Back to mapping** returns to the workspace to fix something.
-- **Bake to animation layer** (on by default) keeps your existing animation safe.
-- **Confirm / Add Animation** bakes the motion onto the destination joints and
-  returns to the main window, where the clip shows **Transferred**.
+- **Bake to animation layer** (on by default) keeps your existing animation
+  safe on the base layer.
+- **Transfer** bakes the motion onto the destination joints and shows a
+  result card: backend, layer name, joints baked, bone-length error, time.
+- **New anim** takes you back to Setup to add the next animation; the
+  transferred clip stays in the list with status *Transferred*.
+- **Done** returns to Setup. **‹ Back** returns to Match to fix something.
 
 The Animation Transfer Guide explains the backends, the baking options and
 the checks RigFlow performs on every bake.
 
-## 6. Keep animating
+## After the transfer
 
 The destination's facial joints and controls were never part of the body
 mapping, so they are untouched: open your facial controls and keep keying.
@@ -113,11 +91,9 @@ The transferred body motion lives on the `rigflow_transfer` animation layer;
 mute it to compare, lower its weight to blend, or delete it to start over.
 Ctrl+Z right after a transfer removes it in one step.
 
-## Shortcuts and tips
+## Tips
 
-- **Help** menu: every guide, the repository, issue reporting and an About
-  dialog with the environment details to paste into bug reports.
-- **Help → Create demo scene** builds two ready-made characters so you can try
-  the full workflow without downloading anything.
-- Several animations for the same character: save a mapping preset after the
-  first one and load it for the next.
+- Several animations for the same pair of characters: save a mapping preset
+  from **Details** after the first one and load it for the next.
+- **Help** gives you every guide, the repository, issue reporting and an
+  *About* dialog whose environment details you can paste into bug reports.

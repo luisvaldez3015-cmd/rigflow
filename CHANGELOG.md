@@ -39,6 +39,14 @@ and the project uses [Semantic Versioning](https://semver.org/).
   steps per operation (preview, transfer, cancel).
 - `Help → Create demo scene` builds the sample characters and loads them as
   destination in one click.
+- Official brand: logo (wordmark with a Maya-joint "i"), transparent
+  joint-glyph icons for the shelf and window, vector wordmark header, cyan
+  accent colour.
+- Step-based interface designed from the owner's sketches: **Setup** (Mesh /
+  Rig / Anim slot cards, central add tile, Validate), **Match** (Mesh A / Mesh
+  B viewports, Match / Unmatch / Auto-match driven by the live Maya joint
+  selection, collapsible details table) and **Transfer** (preview viewport,
+  playback, Transfer / New anim / Done).
 - Embedded Maya viewports in the matching and review views are created under
   Qt layouts with private cameras and never touch the undo queue; an in-Maya
   end-to-end check (`scripts/maya_gui_check.py`) drives the real UI, bakes a

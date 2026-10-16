@@ -1,7 +1,8 @@
 # Animation Transfer Guide
 
-This page explains what happens between **Review Animation** and the moment
-the transferred motion lands on your character, and which choices you have.
+This page explains what happens in the **Transfer** step, between the live
+preview and the moment the transferred motion lands on your character, and
+which choices you have.
 
 ## The workflow in one picture
 
@@ -12,7 +13,7 @@ Source skeleton (animated)        Destination skeleton (your rig)
                         │
               1. Preview (live, nothing written)
                         │
-              2. Confirm → bake keys
+              2. Transfer → bake keys
                         │
      destination joints keyed on an animation layer (default)
 ```
@@ -80,8 +81,8 @@ error with a hint instead of silently succeeding.
 
 - **Preview** is one undo step (it creates the HumanIK characters and the
   live connection).
-- **Confirm / Transfer** is one undo step: Ctrl+Z removes the layer and the
-  keys. If you had a preview running, a second Ctrl+Z removes it as well.
+- **Transfer** is one undo step: Ctrl+Z removes the layer and the keys. If
+  you had a preview running, a second Ctrl+Z removes it as well.
 - Closing the window or removing a clip cancels its preview and restores the
   destination's original inputs.
 

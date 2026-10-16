@@ -7,7 +7,7 @@ check (`scripts/maya_gui_check.py`), not merely "the UI exists".
 | Milestone | Status | Evidence |
 |-----------|--------|----------|
 | M1 Feasibility and architecture | Done | `01-feasibility-and-architecture.md`, `docs/developer/humanik-backend.md` (HIK spike on Maya 2023/2024). |
-| M2 Working interface | Done; drag-and-drop of files still to be tried by hand | 10 off-screen UI smoke tests; `scripts/ui_preview.py` screenshots; in-Maya check drives the real dockable window through all three views with embedded, undo-neutral viewports (content verified by playblast). |
+| M2 Working interface | Done (rebuilt as the owner's step-based layout: Setup / Match / Transfer); drag-and-drop of files still to be tried by hand | 13 off-screen UI smoke tests; `scripts/ui_preview.py` screenshots; in-Maya check drives the real dockable window through the three steps, including a Match from a real joint selection, with embedded, undo-neutral viewports (content verified by playblast). |
 | M3 Skeleton detection and matching | Done | 63 pure unit tests (naming, topology, fusion, overrides, validation, presets); integration tests on scene-built skeletons and FBX/MA round trips. |
 | M4 Animation transfer | Done for humanoid skeletons | 20 retargeting integration tests (HIK live preview, bake direct/layer, layer preservation, partial mappings, undo, matrix fallback); in-Maya check: 20 roles baked, bone-length error 2e-14 cm, facial setup untouched, one-step undo/redo. |
 | M5 Reliability | In progress | Invalid files, missing roles, ambiguous names, nameless skeletons, unit mismatch and excluded roles are tested. Pending: real Mixamo/MetaHuman files from disk, control-rig destinations, Maya 2025/2026 (PySide6). |

@@ -53,14 +53,21 @@ with shin and foot) can never be excluded and must be complete on both sides.
 
 ## Correcting a match by hand
 
-1. Select the role's row in the table.
-2. Click the correct joint in the Source tree and in the Destination tree.
-3. Press **Link selected** (or double-click). The row turns green and is
-   marked *manual*.
+In the **Match** step:
+
+1. Click a joint in the **Mesh A** viewport (source), then the corresponding
+   joint in **Mesh B** (destination). The *Selection* readout shows A and B.
+2. Press **Match**. The role of joint A (or of B, when A has none) now pairs
+   the two joints; the row turns green and is marked *manual*.
+3. **Unmatch** drops the pair of the selected joint.
+
+You can also double-click joints in the two hierarchy trees under
+**Details**, or select a row in the table to choose the role explicitly.
 
 Manual corrections survive **Auto-match** recomputations. **Reset to automatic**
-discards them explicitly. Mappings can be saved as `.rigflow.json` presets and
-reloaded for the next animation between the same two skeletons.
+(under **Details**) discards them explicitly. Mappings can be saved as
+`.rigflow.json` presets and reloaded for the next animation between the same
+two skeletons.
 
 ## Validation
 

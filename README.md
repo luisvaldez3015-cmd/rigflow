@@ -16,6 +16,15 @@
 > verification inside Maya's UI is ongoing; no public release has been cut yet.
 > See `CHANGELOG.md`.
 
+## Screenshots
+
+| Setup | Match |
+|-------|-------|
+| ![Setup step](docs/images/setup-empty.png) | ![Match step inside Maya](docs/images/match.png) |
+
+Real captures: the Match step runs inside Maya 2024 with the demo scene
+(source skeleton on the left, destination mannequin on the right).
+
 ## What RigFlow does
 
 - Inspects a Maya scene and tells you what it found: meshes, joint hierarchies,
@@ -63,7 +72,14 @@ demo.build_demo_scene(new_scene=True)   # Mixamo-style source + short destinatio
 import rigflow; rigflow.launch()
 ```
 
-Select `root_JNT` → **Use selection** (Rig), then **From scene…** → `mixamorig:Hips`.
+Or simply **Help → Create demo scene** inside RigFlow: it loads the destination
+for you. Then press the **+** tile → *From scene…* → `mixamorig:Hips`,
+**Validate**, **Next: Match ›**, **Next: Transfer ›**, **Transfer**.
+
+The interface is a three-step flow: **Setup** (Mesh / Rig / Anim slots and the
+animation list), **Match** (Mesh A and Mesh B viewports with Match / Unmatch
+driven by the joints you click) and **Transfer** (live preview, bake to an
+animation layer, add the next animation).
 
 ## Documentation
 
