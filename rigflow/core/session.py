@@ -1,8 +1,9 @@
 """Session state shared by the UI and the services.
 
-The :class:`Session` is a plain observable container: it knows the destination
-model, the destination rig and the list of animation clips, and notifies
-listeners when any of them changes. It never touches Maya; the services in
+The :class:`Session` is a plain observable container: it knows the models
+added in Setup (and the plan derived from them), the active destination
+model/rig and the list of animation clips, and notifies listeners when any of
+them changes. It never touches Maya; the services in
 ``rigflow.scene`` / ``rigflow.retargeting`` fill it, and the widgets in
 ``rigflow.ui`` render it. Keeping this object pure makes the UI testable with
 fake data and keeps the engine usable from scripts.
@@ -15,6 +16,8 @@ from enum import Enum
 from typing import Callable, Dict, List, Optional
 
 from rigflow.animation.clip import AnimationClip
+from rigflow.core.character import Character, model_label
+from rigflow.core.plan import TransferPlan, derive_plan
 from rigflow.mapping.model import SkeletonLabeling
 from rigflow.skeleton.model import Skeleton
 
@@ -24,6 +27,8 @@ class SessionEvent(str, Enum):
     RIG_CHANGED = "rig_changed"
     CLIPS_CHANGED = "clips_changed"
     ACTIVE_CLIP_CHANGED = "active_clip_changed"
+    CHARACTERS_CHANGED = "characters_changed"  #: Models added/removed/replaced in Setup.
+    PLAN_CHANGED = "plan_changed"  #: The proposed process changed (payload: TransferPlan).
     STATUS = "status"  #: Transient status/progress message for the status bar.
 
 
@@ -75,6 +80,9 @@ class Session:
         self.rig: Optional[RigInfo] = None
         self.clips: List[AnimationClip] = []
         self.active_clip_id: Optional[str] = None
+        self.characters: List[Character] = []
+        self.preferred_source_id: Optional[str] = None
+        self.plan: TransferPlan = derive_plan([])
         self._listeners: List[Listener] = []
 
     # --- observers -----------------------------------------------------------------------
@@ -96,6 +104,77 @@ class Session:
     def status(self, message: str, level: str = "info") -> None:
         """Broadcast a transient status message (``level``: info/warning/error/success)."""
         self._emit(SessionEvent.STATUS, {"message": message, "level": level})
+
+    # --- models (Setup step) ---------------------------------------------------------------
+
+    def add_character(self, character: Character) -> Character:
+        self.characters.append(character)
+        self._characters_changed()
+        return character
+
+    def remove_character(self, character_id: str) -> Optional[Character]:
+        character = self.get_character(character_id)
+        if character is None:
+            return None
+        self.characters.remove(character)
+        if self.preferred_source_id == character_id:
+            self.preferred_source_id = None
+        self._characters_changed()
+        return character
+
+    def replace_character(self, character_id: str, character: Character) -> Character:
+        """Swap a model in place (same position, same id)."""
+        for index, existing in enumerate(self.characters):
+            if existing.character_id == character_id:
+                character.character_id = character_id
+                self.characters[index] = character
+                break
+        else:
+            self.characters.append(character)
+        self._characters_changed()
+        return character
+
+    def character_updated(self, character_id: str) -> None:
+        """Notify listeners that a model's slots changed in place."""
+        self._characters_changed()
+
+    def get_character(self, character_id: Optional[str]) -> Optional[Character]:
+        for character in self.characters:
+            if character.character_id == character_id:
+                return character
+        return None
+
+    def label_for(self, character_id: Optional[str]) -> str:
+        """``Model A`` / ``Model B`` ... by Setup position."""
+        for index, character in enumerate(self.characters):
+            if character.character_id == character_id:
+                return model_label(index)
+        return "Model"
+
+    def set_preferred_source(self, character_id: Optional[str]) -> TransferPlan:
+        self.preferred_source_id = character_id
+        return self.recompute_plan()
+
+    def swap_direction(self) -> TransferPlan:
+        """Make the current destination the preferred source."""
+        return self.set_preferred_source(self.plan.destination_id)
+
+    def recompute_plan(self) -> TransferPlan:
+        self.plan = derive_plan(self.characters, self.preferred_source_id)
+        self._emit(SessionEvent.PLAN_CHANGED, self.plan)
+        return self.plan
+
+    def _characters_changed(self) -> None:
+        self._emit(SessionEvent.CHARACTERS_CHANGED, self.characters)
+        self.recompute_plan()
+
+    @property
+    def source(self) -> Optional[Character]:
+        return self.get_character(self.plan.source_id)
+
+    @property
+    def destination(self) -> Optional[Character]:
+        return self.get_character(self.plan.destination_id)
 
     # --- model / rig ---------------------------------------------------------------------
 
