@@ -6,30 +6,35 @@
 
 <p align="center">
   Transfer animation between characters with different proportions, skeletons and naming conventions.<br>
-  <strong>Import → Match → Preview → Transfer → keep animating.</strong>
+  <strong>Add models → Fit rig if needed → Match → Preview → Transfer → keep animating.</strong>
 </p>
 
-> **Status: alpha, under active development.** Skeleton analysis, joint
-> matching, scene inspection, FBX/Maya import, the HumanIK and matrix
-> retargeting backends and the PySide interface are implemented and covered by
-> 73 unit tests and 44 Maya integration tests (Maya 2023 and 2024). Interactive
-> verification inside Maya's UI is ongoing; no public release has been cut yet.
-> See `CHANGELOG.md`.
+> **Status: alpha, under active development.** Model detection, skeleton
+> analysis, joint matching, FBX/OBJ/Maya import, rig fitting and binding, the
+> HumanIK and matrix retargeting backends and the PySide interface are
+> implemented and covered by 96 unit tests and 61 Maya integration tests
+> (Maya 2023 and 2024), plus an end-to-end check inside Maya's UI. No public
+> release has been cut yet. See `CHANGELOG.md`.
 
 ## Screenshots
 
-| Setup | Match | Transfer |
-|-------|-------|----------|
-| ![Setup step](docs/images/setup-empty.png) | ![Match step inside Maya](docs/images/match.png) | ![Transfer step inside Maya](docs/images/transfer.png) |
+| Setup | Rig | Match | Transfer |
+|-------|-----|-------|----------|
+| ![Setup with two models](docs/images/setup-models.png) | ![Rig step inside Maya](docs/images/rig.png) | ![Match step inside Maya](docs/images/match.png) | ![Transfer step inside Maya](docs/images/transfer.png) |
 
-Real captures from Maya 2024 with the demo scene: Match shows the source
-skeleton (Mesh A) and the destination mannequin (Mesh B); Transfer shows the
+Real captures from Maya 2024 with the demo scene. Setup shows Model A (Mixamo-
+style joints with a jump) and Model B (skinned mannequin) with the process
+RigFlow proposes; Rig shows the source skeleton fitted onto a mesh-only copy
+before binding; Match shows the two models side by side; Transfer shows the
 live HumanIK preview at frame 24 before baking.
 
 ## What RigFlow does
 
-- Inspects a Maya scene and tells you what it found: meshes, joint hierarchies,
-  skeleton roots, animation data.
+- Works with whole models: add a scene, FBX, OBJ or Maya selection and RigFlow
+  detects the mesh, the rig and the animation it brings, then proposes the
+  process for the two models you added.
+- Copies a skeleton onto a mesh-only model (fit to its height, bind) when the
+  destination has no rig yet.
 - Labels both skeletons against a canonical humanoid template using joint
   names **and** hierarchy topology, with a confidence score for every joint.
 - Shows the proposed source-to-destination joint matches with green / yellow /
@@ -42,6 +47,8 @@ live HumanIK preview at frame 24 before baking.
 ## What RigFlow does not do (yet)
 
 - It does not retarget facial animation.
+- The rig it copies onto a mesh-only model is a starting point (uniform fit,
+  closest-distance skin weights), not a production rig.
 - It does not guarantee results on arbitrary non-humanoid or heavily
   customised rigs. Common humanoid skeletons come first.
 - It does not bake onto animation controls of FK/IK rigs in v1; it bakes onto
@@ -73,14 +80,18 @@ demo.build_demo_scene(new_scene=True)   # Mixamo-style source + short destinatio
 import rigflow; rigflow.launch()
 ```
 
-Or simply **Help → Create demo scene** inside RigFlow: it loads the destination
-for you. Then press the **+** tile → *From scene…* → `mixamorig:Hips`,
-**Validate**, **Next: Match ›**, **Next: Transfer ›**, **Transfer**.
+Or simply **Help → Create demo scene** inside RigFlow: it adds both models
+and detects their contents. Press **Start: Match ›**, **Next: Transfer ›**,
+then **Transfer**. After building the scene from Python, add `mixamorig:Hips`
+and the destination mesh using **+ → From scene…** or **Use Maya selection**.
 
-The interface is a three-step flow: **Setup** (Mesh / Rig / Anim slots and the
-animation list), **Match** (Mesh A and Mesh B viewports with Match / Unmatch
-driven by the joints you click) and **Transfer** (live preview, bake to an
-animation layer, add the next animation).
+**Setup** works with whole models: add a `.ma`, `.mb`, `.fbx`, `.obj` or Maya
+selection, and each model card shows its detected Mesh / Rig / Anim slots.
+Add the second model and start the proposed process. A mesh-only destination
+adds **Rig** (fit and bind the source skeleton) before **Match** (source and
+destination viewports with Match / Unmatch) and **Transfer** (live preview
+and bake). **Swap direction** chooses the source when both are animated;
+**New anim** replaces the source while keeping the destination.
 
 ## Documentation
 

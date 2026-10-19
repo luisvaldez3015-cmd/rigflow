@@ -80,6 +80,23 @@ class SceneImporterTests(unittest.TestCase):
     def test_maya_binary_roundtrip(self):
         self._check_animated_import(self._export("mb"), "maya")
 
+    def test_obj_mesh_roundtrip(self):
+        path = os.path.join(self.directory, "mesh only.obj")
+        cube = cmds.polyCube()[0]
+        cmds.select(cube)
+        cmds.loadPlugin("objExport", quiet=True)
+        cmds.file(path, force=True, type="OBJexport", exportSelected=True,
+                  options="groups=1;ptgroups=1;materials=0;smoothing=1;normals=1")
+        sf.new_scene()
+        result = import_file(path)
+        self.assertEqual(result.kind, "obj")
+        self.assertEqual(len(result.report.meshes), 1)
+        self.assertFalse(result.report.has_skeleton)
+        self.assertEqual(result.report.meshes[0].vertex_count, 8)
+        remove_import(result)
+        self.assertFalse(any(cmds.objExists(n) for n in result.new_nodes))
+        self.assertFalse(cmds.namespace(exists=result.namespace))
+
     def test_mesh_only_and_namespace_collisions(self):
         path = self._export("ma", mesh_only=True)
         first = import_file(path)

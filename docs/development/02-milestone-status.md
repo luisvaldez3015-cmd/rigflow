@@ -1,15 +1,15 @@
 # Milestone status
 
-_Last updated 2026-10-16._ Honest snapshot of what is done, verified and pending.
+_Last updated 2026-10-19._ Honest snapshot of what is done, verified and pending.
 "Verified" means covered by an automated test or by the in-Maya end-to-end
 check (`scripts/maya_gui_check.py`), not merely "the UI exists".
 
 | Milestone | Status | Evidence |
 |-----------|--------|----------|
 | M1 Feasibility and architecture | Done | `01-feasibility-and-architecture.md`, `docs/developer/humanik-backend.md` (HIK spike on Maya 2023/2024). |
-| M2 Working interface | Done (rebuilt as the owner's step-based layout: Setup / Match / Transfer); drag-and-drop of files still to be tried by hand | 13 off-screen UI smoke tests; `scripts/ui_preview.py` screenshots; in-Maya check drives the real dockable window through the three steps, including a Match from a real joint selection, with embedded, undo-neutral viewports (content verified by playblast). |
+| M2 Working interface | Done (model-based Setup from the owner's description: one Add per model, detected Mesh / Rig / Anim slots, proposed process with Swap, Rig step for mesh-only destinations); drag-and-drop of files still to be tried by hand | 21 off-screen UI smoke tests; `scripts/ui_preview.py` screenshots; in-Maya check drives the real dockable window through both scenarios (animation A → B, and mesh-only B: fit → bind → Match → Transfer) with embedded, undo-neutral viewports (content verified by playblast). |
 | M3 Skeleton detection and matching | Done | 63 pure unit tests (naming, topology, fusion, overrides, validation, presets); integration tests on scene-built skeletons and FBX/MA round trips. |
-| M4 Animation transfer | Done for humanoid skeletons | 20 retargeting integration tests (HIK live preview, bake direct/layer, layer preservation, partial mappings, undo, matrix fallback); in-Maya check: 20 roles baked, bone-length error 2e-14 cm, facial setup untouched, one-step undo/redo. |
+| M4 Animation transfer | Done for humanoid skeletons; rig transfer (fit + bind) done as a first version | 20 retargeting integration tests (HIK live preview, bake direct/layer, layer preservation, partial mappings, undo, matrix fallback) + 8 rig-transfer tests (fit geometry, orientations, undo, bind weights, Z-up, fitted skeleton → 15 roles green → HIK bake); in-Maya check: 20 roles baked, bone-length error 2e-14 cm, facial setup untouched, one-step undo/redo. |
 | M5 Reliability | In progress | Invalid files, missing roles, ambiguous names, nameless skeletons, unit mismatch and excluded roles are tested. Pending: real Mixamo/MetaHuman files from disk, control-rig destinations, Maya 2025/2026 (PySide6). |
 | M6 Documentation and release | In progress | User guides (installation, user guide, compatibility, matching, transfer, troubleshooting) and developer docs exist. Pending: GitHub repository, release ZIP, screenshots in docs, GitHub Pages decision. |
 | M7 Portfolio | Not started | Needs real screen recordings once M5 is closed. |
@@ -18,8 +18,9 @@ check (`scripts/maya_gui_check.py`), not merely "the UI exists".
 
 | Metric | Value |
 |--------|-------|
-| Unit tests | 73 passing (also on Maya 2023) |
-| Integration tests | 44 passing (also on Maya 2023) |
+| Unit tests | 96 passing (also on Maya 2023) |
+| Integration tests | 61 passing (also on Maya 2023) |
+| Rig fit scale, demo mesh copy vs Mixamo-style source | 0.708 (mesh height / skeleton height) |
 | Required roles auto-matched green (Mixamo → custom) | 15 / 15 (20 roles total incl. spine chain, neck, toes) |
 | HIK characterise + bake, 20 joints | ≈ 1 s headless, ≈ 3 s with verification inside the UI |
 | Destination hips rise vs source rise | 0.667 (= hip-height ratio 66 / 100) |

@@ -6,6 +6,7 @@ from rigflow.scene.animation_io import (
     animation_range, has_animation, linear_unit, scene_fps, set_playback_range, time_unit, up_axis,
 )
 from rigflow.scene.importer import ImportResult, import_file, remove_import
+from rigflow.scene.characters import CharacterScan, meshes_for_skeleton, scan_import, scan_nodes
 from rigflow.scene.inspector import (
     MeshInfo, SceneReport, SkeletonInfo, find_meshes, find_skeleton_roots, inspect_scene,
     is_control, selection, skeleton_root_for_mesh,
@@ -16,6 +17,7 @@ from rigflow.scene.undo import suspended_undo, undo_chunk, undoable
 from rigflow.scene.viewport import create_model_panel, delete_model_panel, frame_nodes, panel_container
 
 __all__ = [
+    "CharacterScan", "scan_nodes", "meshes_for_skeleton", "scan_import",
     "MeshInfo", "SkeletonInfo", "SceneReport", "ImportResult", "inspect_scene",
     "find_skeleton_roots", "find_meshes", "is_control", "skeleton_root_for_mesh", "selection",
     "read_skeleton", "read_skeleton_rest", "import_file", "remove_import", "animation_range",

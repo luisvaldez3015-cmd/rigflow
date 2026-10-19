@@ -52,17 +52,17 @@ def _cleanup(nodes: Sequence[str], namespace: str) -> None:
 
 
 def import_file(path: str, namespace: Optional[str] = None) -> ImportResult:
-    """Import FBX, Maya ASCII or Maya Binary; reject and clean unusable content."""
+    """Import FBX, OBJ or Maya files; reject and clean unusable content."""
     path = os.path.abspath(os.fspath(path))
     extension = os.path.splitext(path)[1].lower()
     if not os.path.isfile(path):
         raise ImportError_("File does not exist: {}".format(path),
-                           hint="Choose an existing FBX, .ma or .mb file.")
-    if extension not in (".fbx", ".ma", ".mb"):
+                           hint="Choose an existing FBX, OBJ, .ma or .mb file.")
+    if extension not in (".fbx", ".obj", ".ma", ".mb"):
         raise ImportError_("Unsupported file extension: {}".format(extension),
-                           hint="Export the source as FBX, Maya ASCII (.ma) or Maya Binary (.mb).")
+                           hint="Export the source as FBX, OBJ, Maya ASCII (.ma) or Maya Binary (.mb).")
     ns = _namespace(path, namespace)
-    kind = "fbx" if extension == ".fbx" else "maya"
+    kind = {".fbx": "fbx", ".obj": "obj"}.get(extension, "maya")
     with undo_chunk("RigFlow: import source"):
         previous_namespace = cmds.namespaceInfo(currentNamespace=True, absoluteName=True)
         before = set(cmds.ls(long=True) or [])
@@ -71,14 +71,16 @@ def import_file(path: str, namespace: Optional[str] = None) -> ImportResult:
             cmds.namespace(setNamespace=":")
             if kind == "fbx" and not cmds.pluginInfo("fbxmaya", query=True, loaded=True):
                 cmds.loadPlugin("fbxmaya", quiet=True)
+            if kind == "obj" and not cmds.pluginInfo("objExport", query=True, loaded=True):
+                cmds.loadPlugin("objExport", quiet=True)
             # Plugin loading can create persistent plugin infrastructure, not import content.
             before = set(cmds.ls(long=True) or [])
-            file_type = {".fbx": "FBX", ".ma": "mayaAscii", ".mb": "mayaBinary"}[extension]
+            file_type = {".fbx": "FBX", ".obj": "OBJ", ".ma": "mayaAscii", ".mb": "mayaBinary"}[extension]
             try:
                 imported = cmds.file(path, i=True, type=file_type, namespace=ns,
                                      returnNewNodes=True, ignoreVersion=True,
                                      mergeNamespacesOnClash=False,
-                                     options="fbx" if kind == "fbx" else "v=0;") or []
+                                     options={"fbx": "fbx", "obj": "mo=1"}.get(kind, "v=0;")) or []
             except RuntimeError:
                 if kind != "fbx":
                     raise
@@ -103,7 +105,7 @@ def import_file(path: str, namespace: Optional[str] = None) -> ImportResult:
             if isinstance(exc, ImportError_):
                 raise
             raise ImportError_("Could not import {}: {}".format(path, exc),
-                               hint="Check the file in Maya and verify its format/plugin is available.") from exc
+                               hint="Check the FBX, OBJ or Maya file and verify its format/plugin is available.") from exc
         finally:
             cmds.namespace(setNamespace=previous_namespace)
 

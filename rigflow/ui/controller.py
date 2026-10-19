@@ -18,6 +18,7 @@ from rigflow.core import compat
 from rigflow.core.errors import RigFlowError, SceneError, MappingError
 from rigflow.core.logging import get_logger
 from rigflow.core.session import Session, ModelInfo, RigInfo
+from rigflow.core.character import Character, MeshSlot, RigSlot, AnimSlot
 from rigflow.mapping.matcher import auto_map, label_skeleton
 from rigflow.mapping.validation import ValidationReport, validate_mapping
 from rigflow.mapping.presets import save_mapping, load_mapping
@@ -68,6 +69,116 @@ class ControllerBase(QtCore.QObject):
         self._depth = 0
         self._selected_pairs = {}
         self._source_labels = {}
+        self._character_clips = {}
+        self._clip_destinations = {}
+        self._fit = None
+        self._fit_destination_id = None
+
+    def add_model_from_file(self, path):
+        raise NotImplementedError
+
+    def add_model_from_selection(self):
+        raise NotImplementedError
+
+    def add_model_from_scene(self, node):
+        raise NotImplementedError
+
+    def list_scene_candidates(self):
+        raise NotImplementedError
+
+    def remove_model(self, character_id):
+        raise NotImplementedError
+
+    def replace_model_from_file(self, character_id, path):
+        raise NotImplementedError
+
+    @action()
+    def swap_direction(self):
+        self._stop_model_previews()
+        if self._fit is not None and not self.cancel_rig_fit():
+            return None
+        return self.session.swap_direction()
+
+    def _stop_model_previews(self):
+        for clip in list(self.session.clips):
+            if self.stop_preview(clip.clip_id) is False:
+                raise SceneError("Could not stop the current preview.")
+
+    def _publish_destination(self):
+        destination = self.session.destination
+        if destination is None:
+            raise SceneError("Add two models with transferable content first.")
+        mesh, rig = destination.mesh, destination.rig
+        self.session.set_model(ModelInfo(destination.name, list(mesh.meshes), mesh.vertex_count,
+            mesh.skinned, rig.root if rig else None) if destination.has_mesh else None)
+        self.session.set_rig(RigInfo(destination.name, rig.root, rig.skeleton, rig.labeling,
+            rig.convention, warnings=list(rig.warnings)) if destination.has_rig else None)
+
+    @action("Starting proposed process…")
+    def start_plan(self):
+        if not self.session.plan.ready:
+            raise SceneError(self.session.plan.message)
+        self._stop_model_previews()
+        self._publish_destination()
+        if self.session.plan.first_step == "rig":
+            return {"step": "rig"} if self.fit_rig() is not None else None
+        source = self.session.source
+        clip = self.session.get_clip(self._character_clips.get(source.character_id))
+        if clip is None:
+            clip = self._model_clip(source)
+            self._character_clips[source.character_id] = clip.clip_id
+            self.session.add_clip(clip)
+        else:
+            self.session.set_active_clip(clip.clip_id)
+        destination = self.session.destination
+        target = (destination.character_id, destination.rig.skeleton)
+        if self._clip_destinations.get(clip.clip_id) != target:
+            clip.mapping = None
+        self._clip_destinations[clip.clip_id] = target
+        if self.auto_map(clip.clip_id) is None:
+            return None
+        return {"step": "match", "clip_id": clip.clip_id}
+
+    def fit_rig(self):
+        raise NotImplementedError
+
+    def refit_rig(self):
+        raise NotImplementedError
+
+    def cancel_rig_fit(self):
+        raise NotImplementedError
+
+    @action()
+    def rig_fit(self):
+        return self._fit
+
+    @action(default=list)
+    def rig_viewport_nodes(self):
+        destination = self.session.get_character(self._fit_destination_id) or self.session.destination
+        meshes = list(destination.mesh.meshes) if destination and destination.has_mesh else []
+        return meshes + ([self._fit.root] if self._fit else [])
+
+    def bind_rig(self):
+        raise NotImplementedError
+
+    def _forget_destination(self, character_id):
+        """A removed/replaced destination invalidates the mappings and results made against it."""
+        for clip_id, (destination_id, _) in list(self._clip_destinations.items()):
+            if destination_id != character_id:
+                continue
+            clip = self.session.get_clip(clip_id)
+            if clip is not None:
+                clip.mapping, clip.result, clip.notes = None, {}, []
+                clip.status = ClipStatus.IMPORTED
+                self.session.clip_updated(clip_id)
+            self._clip_destinations.pop(clip_id, None)
+
+    def _mark_destination_animation(self, clip, result):
+        destination = self.session.destination
+        if destination is not None:
+            destination.anim = AnimSlot(result.get("frame_range", clip.frame_range), clip.fps,
+                                       len(result.get("baked_joints", [])), transferred=True)
+            self.session.character_updated(destination.character_id)
 
     def begin_selection(self, clip_id):
         """Start a fresh Match selection lifetime."""
@@ -321,6 +432,7 @@ class ControllerBase(QtCore.QObject):
     @action()
     def shutdown(self):
         """Pause playback and release all live preview resources."""
+        self.cancel_rig_fit()
         self.pause()
         for clip in self.session.clips:
             self.stop_preview(clip.clip_id)
@@ -337,6 +449,158 @@ class Controller(ControllerBase):
         self._viewport_cameras = {}
         self._last_selection = {}
         self._selection_skeletons = {}
+        self._model_imports = {}
+
+    def _rig_slot(self, root):
+        skeleton = self._service("skeleton_reader").read_skeleton_rest(root)
+        labeling = label_skeleton(skeleton)
+        return RigSlot(root, skeleton, labeling, labeling.convention, list(labeling.notes))
+
+    def _character(self, scan, result=None):
+        return Character(scan.name, source_path=result.path if result else None,
+            namespace=result.namespace if result else None,
+            mesh=MeshSlot([m.transform for m in scan.meshes], sum(m.vertex_count for m in scan.meshes),
+                          any(m.skinned for m in scan.meshes)) if scan.meshes else None,
+            rig=self._rig_slot(scan.skeleton.root) if scan.skeleton else None,
+            anim=AnimSlot(scan.frame_range, scan.fps, scan.skeleton.animated_joints) if scan.has_anim else None,
+            notes=list(scan.warnings))
+
+    def _load_model(self, path):
+        importer = self._service("importer")
+        result = importer.import_file(path)
+        try:
+            character = self._character(self._service("characters").scan_import(result), result)
+            if not character.usable:
+                raise SceneError("No mesh or readable skeleton detected.")
+            return character, result
+        except Exception:
+            importer.remove_import(result)
+            raise
+
+    @action("Adding model…")
+    def add_model_from_file(self, path):
+        with self._undo("RigFlow Add Model"):
+            character, result = self._load_model(path)
+            self._model_imports[character.character_id] = result
+            return self.session.add_character(character)
+
+    @action("Detecting selected model…")
+    def add_model_from_selection(self):
+        nodes = self._service("inspector").selection()
+        if not nodes:
+            raise SceneError("Nothing selected.", "Select a mesh or a skeleton root in Maya.")
+        character = self._character(self._service("characters").scan_nodes(nodes, nodes[0].rsplit("|", 1)[-1]))
+        if not character.usable:
+            raise SceneError("No mesh or readable skeleton detected.")
+        return self.session.add_character(character)
+
+    @action("Detecting scene model…")
+    def add_model_from_scene(self, node):
+        character = self._character(self._service("characters").scan_nodes([node], node.rsplit("|", 1)[-1]))
+        if not character.usable:
+            raise SceneError("No mesh or readable skeleton detected.")
+        return self.session.add_character(character)
+
+    @action(default=list)
+    def list_scene_candidates(self):
+        inspector = self._service("inspector")
+        owned = set()
+        for character in self.session.characters:
+            if character.has_mesh:
+                owned.update(character.mesh.meshes)
+            if character.has_rig:
+                owned.update(character.rig.skeleton)
+                owned.add(character.rig.root)
+            result = self._model_imports.get(character.character_id)
+            if result:
+                owned.update(result.new_nodes)
+        short_owned = {node.rsplit("|", 1)[-1] for node in owned}
+        candidates = inspector.find_skeleton_roots() + [m.transform for m in inspector.find_meshes()]
+        return list(dict.fromkeys(node for node in candidates if node not in owned and
+            node.rsplit("|", 1)[-1] not in short_owned and not inspector._is_helper(node)))
+
+    def _release_model(self, character_id):
+        self._stop_model_previews()
+        if self._fit is not None and not self.cancel_rig_fit():
+            raise SceneError("Could not remove the fitted rig.")
+        clip_id = self._character_clips.get(character_id)
+        if clip_id and self.session.get_clip(clip_id):
+            if self.remove_clip(clip_id) is None:
+                raise SceneError("Could not remove the model's animation.")
+        result = self._model_imports.get(character_id)
+        if result:
+            self._service("importer").remove_import(result)
+            self._model_imports.pop(character_id, None)
+        self._character_clips.pop(character_id, None)
+        self._forget_destination(character_id)
+        self.session.set_model(None)
+        self.session.set_rig(None)
+
+    @action("Removing model…")
+    def remove_model(self, character_id):
+        if self.session.get_character(character_id) is None:
+            return None
+        with self._undo("RigFlow Remove Model"):
+            self._release_model(character_id)
+            return self.session.remove_character(character_id)
+
+    @action("Replacing model…")
+    def replace_model_from_file(self, character_id, path):
+        with self._undo("RigFlow Replace Model"):
+            character, result = self._load_model(path)
+            try:
+                self._release_model(character_id)
+            except Exception:
+                self._service("importer").remove_import(result)
+                raise
+            self._model_imports[character_id] = result
+            return self.session.replace_character(character_id, character)
+
+    def _model_clip(self, character):
+        return self._source_clip(character.rig.root, character.name,
+                                 self._model_imports.get(character.character_id))
+
+    @action("Fitting rig…")
+    def fit_rig(self):
+        if self._fit is not None:
+            return self._fit
+        source, destination = self.session.source, self.session.destination
+        if not source or not source.has_rig or not destination or not destination.has_mesh:
+            raise SceneError("A source rig and destination mesh are required.")
+        with self._undo("RigFlow Fit Rig"):
+            self._fit = importlib.import_module("rigflow.rigging.transfer").fit_skeleton(
+                source.rig.root, destination.mesh.meshes, namespace=destination.namespace)
+        self._fit_destination_id = destination.character_id
+        return self._fit
+
+    @action("Refitting rig…")
+    def refit_rig(self):
+        return self.fit_rig() if self.cancel_rig_fit() else None
+
+    @action("Removing fitted rig…", default=False)
+    def cancel_rig_fit(self):
+        if self._fit is not None:
+            with self._undo("RigFlow Cancel Rig Fit"):
+                importlib.import_module("rigflow.rigging.transfer").remove_fit(self._fit)
+            self._fit = None
+            self._fit_destination_id = None
+        return True
+
+    @action("Binding rig…")
+    def bind_rig(self):
+        if self._fit is None:
+            raise SceneError("Fit the rig before binding.")
+        destination = self.session.get_character(self._fit_destination_id)
+        with self._undo("RigFlow Bind Rig"):
+            importlib.import_module("rigflow.rigging.transfer").bind_skeleton(self._fit, destination.mesh.meshes)
+            destination.rig = self._rig_slot(self._fit.root)
+            destination.mesh.skinned = True
+        self._fit = None
+        self._fit_destination_id = None
+        self.session.character_updated(destination.character_id)
+        if self.session.destination:
+            self._publish_destination()
+        return self.start_plan() if self.session.plan.transfers_animation else {"step": "setup"}
 
     @action(default=lambda: (None, None))
     def selected_pair(self, clip_id):
@@ -506,6 +770,9 @@ class Controller(ControllerBase):
             with self._undo("RigFlow Remove Animation"):
                 self._service("importer").remove_import(result)
             self._imports.pop(clip_id, None)
+        self._clip_destinations.pop(clip_id, None)
+        self._source_labels.pop(clip_id, None)
+        self._selected_pairs.pop(clip_id, None)
         return self.session.remove_clip(clip_id)
 
     @action("Replacing source animation…")
@@ -577,6 +844,10 @@ class Controller(ControllerBase):
     def viewport_nodes(self, clip_id, destination=False):
         nodes = super().viewport_nodes(clip_id, destination)
         if not destination:
+            for character_id, source_clip_id in self._character_clips.items():
+                character = self.session.get_character(character_id)
+                if source_clip_id == clip_id and character and character.has_mesh:
+                    nodes += character.mesh.meshes
             imported = self._imports.get(clip_id)
             if imported is not None:
                 nodes += [mesh.transform for mesh in imported.report.meshes]
@@ -627,6 +898,7 @@ class Controller(ControllerBase):
         clip.result = asdict(result)
         clip.notes = list(result.warnings)
         clip.status = ClipStatus.TRANSFERRED
+        self._mark_destination_animation(clip, clip.result)
         self.session.clip_updated(clip_id)
         self.session.status("{} transferred to {}.".format(clip.name, self.session.rig.name), "success")
         return result
@@ -693,18 +965,17 @@ class Controller(ControllerBase):
 
     @action("Building demo scene…")
     def create_demo_scene(self):
-        """Build the demo characters in a new scene and select them as destination."""
+        """Build the demo scene and add its source and destination models."""
+        for character in list(self.session.characters):
+            self.remove_model(character.character_id)
         for clip in list(self.session.clips):
             self.remove_clip(clip.clip_id)
         demo_module = self._service("demo")
         demo = demo_module.build_demo_scene(new_scene=True)
-        inspector = self._service("inspector")
-        if demo.destination_mesh:
-            self._model(inspector.inspect_scene([demo.destination_mesh]), demo.destination_mesh)
-        self._rig(demo.destination_root)
+        self.add_model_from_scene(demo.source_root)
+        self.add_model_from_scene(demo.destination_mesh or demo.destination_root)
         self.session.status(
-            "Demo scene ready. Use 'From scene…' and pick {} to add its jump animation.".format(
-                demo.source_root), "success")
+            "Demo models ready. Start the proposed process below.", "success")
         return demo
 
     @action()
@@ -721,6 +992,7 @@ class Controller(ControllerBase):
     @action()
     def shutdown(self):
         # View widgets normally release these first; also cover partial embeds.
+        self.cancel_rig_fit()
         for panel in list(self._viewport_cameras):
             self.delete_viewport(panel)
         if self._previews:

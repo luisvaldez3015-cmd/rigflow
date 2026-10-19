@@ -7,6 +7,20 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Model-based Setup (owner's redesign): one **Add** per model (`.ma`, `.mb`,
+  `.fbx`, `.obj` or the Maya selection); RigFlow detects the Mesh / Rig / Anim
+  slots of each model, shows Model A and Model B side by side and proposes the
+  process: transfer animation, transfer the rig first, or swap the direction
+  when both models are animated (`rigflow.core.character`, `rigflow.core.plan`,
+  `rigflow.scene.characters`).
+- **Rig** step for mesh-only destinations: the source skeleton is copied at
+  rest, fitted to the mesh height (visible shapes only) and position, shown in
+  a viewport for adjustment, then bound with closest-distance weights
+  (`rigflow.rigging`). Identical topology means Match is all green afterwards.
+- Transferred animation is recorded on the destination model so it stays the
+  destination; **New anim** replaces the source model. OBJ import. The in-Maya
+  end-to-end check covers both scenarios (animation A → B, and mesh-only B:
+  fit → bind → Match → Transfer).
 - Project scaffold: package layout, licensing, contribution guidelines.
 - Milestone 1 feasibility and architecture report (`docs/development/01-feasibility-and-architecture.md`).
 - Pure-Python skeleton model (`rigflow.skeleton`): joint graph, naming-convention

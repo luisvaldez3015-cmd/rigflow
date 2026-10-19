@@ -26,8 +26,8 @@ class MatchingView(QtWidgets.QWidget):
         layout.addWidget(self.title)
         panels = QtWidgets.QHBoxLayout()
         panels.setSpacing(12)
-        self.source_viewport = ViewportPanel("Mesh A · source", controller, "source")
-        self.destination_viewport = ViewportPanel("Mesh B · destination", controller, "destination")
+        self.source_viewport = ViewportPanel("Model A · source", controller, "source")
+        self.destination_viewport = ViewportPanel("Model B · destination", controller, "destination")
         panels.addWidget(self.source_viewport, 1)
         controls = QtWidgets.QWidget()
         controls.setObjectName("page")
@@ -195,8 +195,12 @@ class MatchingView(QtWidgets.QWidget):
         if destination is not self._destination:
             self._destination = destination
             self.destination_tree.set_skeleton(destination)
-        self.source_viewport.configure(self.controller.viewport_nodes(self.clip_id), "Mesh A · source · " + clip.convention)
-        self.destination_viewport.configure(self.controller.viewport_nodes(self.clip_id, destination=True), "Mesh B · destination · " + (rig.name if rig else "Choose a rig"))
+        session = self.controller.session
+        source, target = session.source, session.destination
+        self.source_viewport.configure(self.controller.viewport_nodes(self.clip_id),
+            session.label_for(source.character_id) + " · " + source.name if source else "Source · " + clip.name)
+        self.destination_viewport.configure(self.controller.viewport_nodes(self.clip_id, destination=True),
+            session.label_for(target.character_id) + " · " + target.name if target else "Destination · " + (rig.name if rig else "Choose a rig"))
         self.mapping_table.set_mapping(clip.mapping)
         counts = clip.mapping.summary() if clip.mapping else {}
         for status, badge in self.badges.items():

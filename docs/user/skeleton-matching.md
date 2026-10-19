@@ -55,8 +55,8 @@ with shin and foot) can never be excluded and must be complete on both sides.
 
 In the **Match** step:
 
-1. Click a joint in the **Mesh A** viewport (source), then the corresponding
-   joint in **Mesh B** (destination). The *Selection* readout shows A and B.
+1. Click a joint in the **Model A** viewport (source), then the corresponding
+   joint in **Model B** (destination). The *Selection* readout shows A and B.
 2. Press **Match**. The role of joint A (or of B, when A has none) now pairs
    the two joints; the row turns green and is marked *manual*.
 3. **Unmatch** drops the pair of the selected joint.

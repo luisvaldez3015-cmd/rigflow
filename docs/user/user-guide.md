@@ -2,9 +2,11 @@
 
 RigFlow transfers body animation from one skeleton to another inside Maya,
 even when the two characters have different proportions, joint names and
-hierarchies. The interface is a three-step flow:
+hierarchies. Add two models and RigFlow proposes the steps:
 
 **1 Setup → 2 Match → 3 Transfer**
+
+For a destination with geometry but no skeleton: **Setup → Rig → Match → Transfer**.
 
 The step indicator in the top-right corner always shows where you are.
 
@@ -20,39 +22,59 @@ rigflow.launch()
 The window docks like any Maya panel. **Help → Create demo scene** builds two
 sample characters so you can try the whole flow without any files.
 
-## Step 1 · Setup
+## Step 1 · Add your models
 
-Three slot cards sit at the top:
+Click the big **+ · Add a model** tile and choose **From file…**, **Use Maya
+selection**, or **From scene…**. You can also drop a `.ma`, `.mb`, `.fbx` or
+`.obj` file on the empty area. A model can be a whole character, an animated
+skeleton such as Mixamo, or geometry without a rig. Selecting a skinned mesh
+also detects its skeleton.
 
-| Card | What it needs | How to fill it |
-|------|---------------|----------------|
-| **Mesh** (optional) | The destination character's geometry | Select the mesh in Maya and press **Use selection**, or **Browse…** / drop an `.fbx` `.ma` `.mb` file |
-| **Rig** (required) | The skeleton that will receive the animation | Select its root joint (or a skinned mesh) and press **Use selection**, or **Browse…** |
-| **Anim** | The source animation | **Add file…** (Mixamo exports, game skeletons, MotionBuilder files) or **From scene…** to pick an animated skeleton already in the scene |
+RigFlow creates a **Model A** card with three small detection slots:
 
-Each card shows a status dot and what RigFlow detected: mesh and vertex
-counts, root joint, joint count, naming convention, how many of the 15
-required roles were found, frame range of the clip.
+- **Mesh**: geometry and vertex count.
+- **Rig**: detected skeleton and joint count.
+- **Anim**: detected animation and frame count.
 
-The big **+** tile in the middle is the fastest way to add an animation:
-click it (or drop a file on it) and choose *From file…* or *From scene…*.
-Once you have animations the area turns into the list; each row shows the
-convention, frame range, status, and the actions **Match**, **Transfer**,
-**Replace** and **Remove**. The small **+** under the list adds more clips;
-each clip keeps its own mapping.
+Each slot says **Detected** or **None**; hover it for details such as skinning,
+root joint, naming convention, required roles or frame range. Slots fill
+automatically when you add the model. **Replace…**, or dropping a file on a
+card, replaces the entire model. **Remove** removes the model and its owned
+import; models taken from the existing Maya scene remain in that scene.
 
-Press **Validate**. RigFlow matches the skeletons automatically and tells you
-the result next to the button: green *Ready: n roles matched*, yellow *n to
-review*, or a red error with a hint. **Next: Match ›** opens step 2.
+Press the small **+ · Add the second model** below the first card to add
+**Model B**. The two cards sit side by side. The banner below them explains
+the proposed process and direction:
+
+- Animated source and rigged destination: **Start: Match ›**.
+- Rigged source and mesh-only destination: **Start: Rig ›**, followed by
+  Match and Transfer when the source is animated.
+- Both models animated: Model A is the default source. **Swap direction**
+  makes Model B the source instead.
+- No transferable content: the banner explains what is missing.
+
+Starting the plan matches the joints automatically. The step indicator updates
+to the proposed process.
+
+## Rig · When the destination has no skeleton
+
+RigFlow copies the source skeleton and fits it to the destination mesh. The
+viewport isolates the mesh and fitted skeleton; the line below shows scale
+and joint count. Move joints in Maya if needed, then press **Bind skin ›**.
+This skins the mesh and opens Match if the source is animated. **Refit**
+discards the current fit and fits a fresh copy; **‹ Back** removes the unbound
+fit and returns to Setup. With an unanimated source, binding completes the
+rig transfer and returns to Setup.
 
 ## Step 2 · Match ("New animation")
 
-Two viewports: **Mesh A** is the source character, **Mesh B** is your
-destination. Both show their skeletons; Maya's own selection highlight marks
+Two viewports show the source on the left and the destination on the right,
+titled with their model labels and names (for example **Model A · mixamorig**
+and **Model B · Nova**). Both show their skeletons; Maya's selection highlight marks
 the joints you click.
 
-- To correct a correspondence: click a joint in Mesh A, click the matching
-  joint in Mesh B (the *Selection* readout shows A and B), press **Match**.
+- To correct a correspondence: click a source joint, click the matching
+  destination joint (the *Selection* readout shows both), press **Match**.
   The pair becomes a manual match and the counters update.
 - **Unmatch** drops the pair of the selected joint (the role turns red if it
   is required, gray if it is optional).
@@ -76,8 +98,8 @@ scrub the timeline. Nothing is written yet.
   safe on the base layer.
 - **Transfer** bakes the motion onto the destination joints and shows a
   result card: backend, layer name, joints baked, bone-length error, time.
-- **New anim** takes you back to Setup to add the next animation; the
-  transferred clip stays in the list with status *Transferred*.
+- **New anim** returns to Setup and opens a file chooser to replace the
+  source model with the next animation. The destination stays loaded.
 - **Done** returns to Setup. **‹ Back** returns to Match to fix something.
 
 The Animation Transfer Guide explains the backends, the baking options and
@@ -90,6 +112,9 @@ mapping, so they are untouched: open your facial controls and keep keying.
 The transferred body motion lives on the `rigflow_transfer` animation layer;
 mute it to compare, lower its weight to blend, or delete it to start over.
 Ctrl+Z right after a transfer removes it in one step.
+
+Setup marks the destination animation as transferred by RigFlow. It stays
+the destination when you add the next source animation.
 
 ## Tips
 

@@ -6,8 +6,8 @@ Launch Maya with this script, for example from a shell::
       "python(\"exec(open('C:/path/to/rigflow/scripts/maya_gui_check.py').read())\")"
 
 The script builds the demo scene, opens the real RigFlow window (real
-controller, embedded viewports), walks the whole workflow — select rig and
-model, add the scene animation, auto-map, live preview, review, bake — and
+controller, embedded viewports), walks the whole workflow — add models,
+start the plan, auto-map, live preview, review, bake — and
 captures a screenshot at each step. It then verifies on the real scene that:
 
 * the destination joints received keys on the RigFlow animation layer,
@@ -153,26 +153,29 @@ def run():
     _pump(1.0)
     _grab(window, "01_main_empty")
 
-    cmds.select(demo.destination_root)
-    controller.set_rig_from_selection()
+    cmds.select(demo.source_root)
+    model_a = controller.add_model_from_selection()
+    REPORT["checks"]["model_a_detected"] = bool(
+        model_a and model_a.has_rig and model_a.has_anim and not model_a.has_mesh)
+    _grab(window, "02_setup_one_model")
     cmds.select(demo.destination_mesh)
-    controller.set_model_from_selection()
+    model_b = controller.add_model_from_selection()
+    REPORT["checks"]["model_b_detected"] = bool(model_b and model_b.has_mesh and model_b.has_rig)
+    REPORT["checks"]["animation_plan"] = controller.session.plan.kind == "animation"
+    REPORT["checks"]["animation_source_a"] = bool(model_a and controller.session.source is model_a)
+    _grab(window, "03_setup_plan")
+    window.start_plan()
+    REPORT["checks"]["start_opens_match"] = window.stack.currentWidget() is window.match_view
     _pump(0.3)
     REPORT["checks"]["rig_valid"] = bool(controller.session.rig and controller.session.rig.valid)
     REPORT["checks"]["model_valid"] = bool(controller.session.model and controller.session.model.valid)
-    _grab(window, "02_main_destination")
-
-    clip = controller.add_animation_from_scene(demo.source_root)
+    clip = controller.session.active_clip
     REPORT["checks"]["clip_added"] = clip is not None
     if clip is None:
         raise RuntimeError("Clip was not added")
     report = window.validate_active()
     REPORT["checks"]["mapping_ok"] = report.ok
     REPORT["checks"]["mapping_summary"] = clip.mapping.summary() if clip.mapping else {}
-    _pump(0.3)
-    _grab(window, "03_main_clip")
-
-    window.open_match(clip.clip_id)
     _pump(1.0)
     hand = clip.mapping.matches["LeftHand"]
     cmds.select([hand.source, hand.destination], replace=True)
@@ -242,6 +245,64 @@ def run():
     REPORT["checks"]["baked_hips_y_frame24"] = round(hips_baked[1], 3)
     REPORT["checks"]["hips_moved_up"] = hips_baked[1] > 66.0 + 10.0
 
+    # A second destination has geometry only: the plan inserts Rig before Match.
+    window.show_setup()
+    removed = controller.remove_model(model_b.character_id)
+    REPORT["checks"]["model_b_removed"] = removed is model_b
+    # Duplicate at the rest frame; the copy inherits locked channels from the skinned original.
+    cmds.currentTime(1)
+    copy = cmds.duplicate(demo.destination_mesh)[0]
+    for channel in ("translateX", "translateY", "translateZ"):
+        cmds.setAttr(copy + "." + channel, lock=False)
+    cmds.move(200, 0, 0, copy, relative=True, worldSpace=True)
+    REPORT["checks"]["copy_moved"] = abs(cmds.getAttr(copy + ".translateX") - 200.0) < 1e-6
+    cmds.select(copy, replace=True)
+    mesh_model = controller.add_model_from_selection()
+    REPORT["checks"]["copy_mesh_only"] = bool(
+        mesh_model and mesh_model.has_mesh and not mesh_model.has_rig and not mesh_model.has_anim)
+    REPORT["checks"]["rig_then_animation_plan"] = controller.session.plan.kind == "rig_then_animation"
+    REPORT["checks"]["rig_plan_source_a"] = controller.session.source is model_a
+    REPORT["checks"]["rig_four_steps"] = len(window.stepper.buttons) == 4
+    window.start_plan()
+    REPORT["checks"]["start_opens_rig"] = window.stack.currentWidget() is window.rig_view
+    fit = controller.rig_fit()
+    REPORT["checks"]["rig_fit_created"] = bool(fit and cmds.objExists(fit.root))
+    fitted_root = fit.root if fit else None
+    if fit:
+        # The fitted joints must sit inside the copy: same lowest point and centre.
+        shapes = [s for s in cmds.listRelatives(copy, shapes=True, fullPath=True)
+                  if not cmds.getAttr(s + ".intermediateObject")]
+        mesh_bounds = cmds.exactWorldBoundingBox(shapes)
+        points = [cmds.xform(j, q=True, ws=True, t=True) for j in fit.joints]
+        joint_bounds = [min(p[i] for p in points) for i in range(3)] + [max(p[i] for p in points) for i in range(3)]
+        REPORT["checks"]["rig_fit_scale"] = round(fit.scale, 4)
+        REPORT["checks"]["rig_fit_inside_mesh"] = (
+            abs(joint_bounds[1] - mesh_bounds[1]) < 1e-3 and abs(joint_bounds[4] - mesh_bounds[4]) < 1e-3
+            and all(abs((joint_bounds[i] + joint_bounds[i + 3]) - (mesh_bounds[i] + mesh_bounds[i + 3])) < 1e-3
+                    for i in (0, 2)))
+    _grab(window, "07_rig_fit")
+    _viewport_diagnostics(window, "rig_fit")
+    window.rig_view.bind_button.click()
+    REPORT["checks"]["bind_opens_match"] = window.stack.currentWidget() is window.match_view
+    REPORT["checks"]["bound_rig_detected"] = bool(mesh_model and mesh_model.has_rig)
+    REPORT["checks"]["copy_has_skin_cluster"] = bool(
+        cmds.ls(cmds.listHistory(copy) or [], type="skinCluster"))
+    second_clip = controller.session.active_clip
+    REPORT["checks"]["rig_mapping_ok"] = bool(second_clip and controller.validate(second_clip.clip_id).ok)
+    if second_clip:
+        window.open_transfer(second_clip.clip_id)
+    REPORT["checks"]["rig_preview_started"] = bool(window.transfer_view._preview_ready)
+    _grab(window, "08_rig_transfer")
+    _viewport_diagnostics(window, "rig_transfer")
+    second_result = controller.bake(second_clip.clip_id) if second_clip else None
+    REPORT["checks"]["rig_bake_succeeded"] = second_result is not None
+    REPORT["checks"]["fitted_hips_has_keys"] = bool(
+        fitted_root and (cmds.keyframe(fitted_root, query=True, keyframeCount=True) or 0) > 0)
+    REPORT["checks"]["rig_destination_stays_b"] = controller.session.destination is mesh_model
+    REPORT["checks"]["rig_animation_marked_transferred"] = bool(
+        mesh_model and mesh_model.has_anim and mesh_model.anim.transferred)
+    _grab(window, "09_rig_baked")
+
     window.close()
     _pump(0.3)
     REPORT["ok"] = all(REPORT["checks"].get(k) for k in (
@@ -250,6 +311,13 @@ def run():
         "undo_removed_layer", "redo_restored_layer", "manual_match",
         "matching_viewports_embedded", "matching_hidden_viewports_released",
         "review_viewports_embedded", "review_hidden_viewports_released",
+        "model_a_detected", "model_b_detected", "animation_plan", "animation_source_a", "start_opens_match",
+        "model_b_removed", "copy_mesh_only", "rig_then_animation_plan", "rig_plan_source_a", "rig_four_steps",
+        "start_opens_rig", "rig_fit_created", "bind_opens_match", "bound_rig_detected", "copy_has_skin_cluster",
+        "rig_mapping_ok", "rig_preview_started", "rig_bake_succeeded", "fitted_hips_has_keys",
+        "rig_destination_stays_b", "rig_animation_marked_transferred", "copy_moved", "rig_fit_inside_mesh",
+        "rig_fit_viewports_embedded", "rig_fit_hidden_viewports_released",
+        "rig_transfer_viewports_embedded", "rig_transfer_hidden_viewports_released",
     ))
 
 

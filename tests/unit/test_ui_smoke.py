@@ -38,29 +38,41 @@ class UISmokeTests(unittest.TestCase):
         QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
 
     def populated_clip(self):
-        self.controller.set_model_from_selection()
-        self.controller.set_rig_from_selection()
-        return self.controller.add_animation_from_file("walk_cycle.fbx")
+        self.controller.add_model_from_file("walk_cycle.fbx")
+        self.controller.add_model_from_selection()
+        result = self.controller.start_plan()
+        return self.controller.session.get_clip(result["clip_id"])
 
     def test_full_workflow_manual_review_and_transfer(self):
         from rigflow.animation.clip import ClipStatus
         from rigflow.mapping.model import MatchStatus
-        self.assertEqual(self.window.stack.count(), 3)
+        self.assertEqual(self.window.stack.count(), 4)
         self.assertEqual(self.window.stepper.current_step, 1)
-        self.assertEqual(set(self.window.setup_view.slot_cards), {"Mesh", "Rig", "Anim"})
-        self.assertIn("Mesh", self.window.model_section.title)
-        self.assertIn("Rig", self.window.rig_section.title)
-        self.assertIn("Anim", self.window.animation_section.title)
         self.assertTrue(self.window.setup_view.add_tile.isVisible())
         self.assertEqual(self.window.setup_view.add_tile.size(), QtCore.QSize(112, 112))
-        self.assertEqual(self.window.clip_list.rowCount(), 0)
-        clip = self.populated_clip()
-        self.assertFalse(self.window.setup_view.add_tile.isVisible())
+        self.assertEqual(len(self.window.setup_view.model_cards), 0)
+        source = self.controller.add_model_from_file("mixamorig.fbx")
+        self.app.processEvents()
         self.assertTrue(self.window.setup_view.small_add_tile.isVisible())
-        self.assertFalse(self.window.setup_view.next_button.isEnabled())
+        self.assertEqual(self.window.setup_view.second_label.text(), "Add the second model")
+        self.assertEqual(len(self.window.setup_view.model_cards), 1)
+        card = self.window.setup_view.model_cards[0]
+        self.assertEqual(set(card.slots), {"Mesh", "Rig", "Anim"})
+        self.assertEqual(card.slots["Mesh"].badge.label.text(), "None")
+        self.assertEqual(card.slots["Anim"].badge.label.text(), "Detected")
+        target = self.controller.add_model_from_selection()
+        self.app.processEvents()
+        banner = self.window.setup_view.plan_banner
+        self.assertIn("Transfer animation", banner.title_label.text())
+        self.assertEqual(banner.start_button.text(), "Start: Match ›")
+        self.assertTrue(banner.isVisible())
+        banner.start_button.click()
+        clip = self.controller.session.active_clip
+        self.assertEqual(self.controller.session.source, source)
+        self.assertEqual(self.controller.session.destination, target)
+        self.assertEqual(len(self.window.stepper.buttons), 3)
+        self.assertFalse(self.window.setup_view.add_tile.isVisible())
         self.assertTrue(self.window.validate_active().ok)
-        self.assertTrue(self.window.setup_view.next_button.isEnabled())
-        self.assertEqual(self.window.clip_list.rowCount(), 1)
         self.window.open_match(clip.clip_id)
         view = self.window.match_view
         self.app.processEvents()
@@ -88,11 +100,13 @@ class UISmokeTests(unittest.TestCase):
             self.window.transfer_view.transfer_button.click()
             bake.assert_called_once_with(clip.clip_id, to_layer=True)
         self.assertEqual(clip.status, ClipStatus.TRANSFERRED)
+        self.assertTrue(target.anim.transferred)
+        self.assertIs(self.controller.session.destination, target)
         self.assertTrue(self.window.transfer_view.result_card.isVisible())
         self.window.transfer_view.done_button.click()
         self.assertIs(self.window.stack.currentWidget(), self.window.setup_view)
         self.assertEqual(self.window.stepper.current_step, 1)
-        self.assertEqual(self.window.clip_list.rowCount(), 1)
+        self.assertEqual(len(self.controller.session.clips), 1)
         self.assertFalse(self.controller.is_playing())
 
     def test_validate_missing_state_and_manual_unmatch(self):
@@ -100,7 +114,6 @@ class UISmokeTests(unittest.TestCase):
         self.assertIn("Add an animation first", self.window.setup_view.validation_label.text())
         clip = self.controller.add_animation_from_file("walk.fbx")
         self.assertFalse(self.window.validate_active().ok)
-        self.assertFalse(self.window.setup_view.next_button.isEnabled())
         self.controller.set_rig_from_selection()
         self.window.validate_active()
         self.window.open_match(clip.clip_id)
@@ -118,18 +131,23 @@ class UISmokeTests(unittest.TestCase):
         self.assertFalse(view.timer.isActive())
         self.assertEqual(self.controller.selected_pair(clip.clip_id), (None, None))
 
-    def test_new_animation_retains_transfer_and_opens_add_menu(self):
-        from rigflow.animation.clip import ClipStatus
+    def test_new_animation_replaces_source_and_retains_destination(self):
         clip = self.populated_clip()
+        source = self.controller.session.source
+        target = self.controller.session.destination
         self.window.open_transfer(clip.clip_id)
         self.window.transfer_view.transfer_button.click()
-        self.window.transfer_view.new_button.click()
+        with mock.patch.object(QtWidgets.QFileDialog, "getOpenFileName", return_value=("jump.fbx", "")):
+            self.window.transfer_view.new_button.click()
         self.app.processEvents()
         self.assertIs(self.window.stack.currentWidget(), self.window.setup_view)
-        self.assertEqual(clip.status, ClipStatus.TRANSFERRED)
+        self.assertEqual(self.controller.session.source.name, "jump")
+        self.assertEqual(self.controller.session.source.character_id, source.character_id)
+        self.assertIs(self.controller.session.destination, target)
+        self.assertTrue(target.anim.transferred)
+        self.assertIsNone(self.controller.session.get_clip(clip.clip_id))
         self.assertIsNone(self.controller._preview_id)
-        self.assertTrue(self.window.add_menu.isVisible())
-        self.window.add_menu.close()
+        self.assertEqual(len(self.controller.session.characters), 2)
 
     def test_real_selection_remembers_each_side_and_tree_override(self):
         from rigflow.ui.controller import Controller
@@ -147,10 +165,141 @@ class UISmokeTests(unittest.TestCase):
             controller.clear_selected_pair(clip.clip_id)
             self.assertEqual(controller.selected_pair(clip.clip_id), (None, None))
 
+    def test_mesh_only_destination_fit_refit_cancel_and_bind(self):
+        self.controller.add_model_from_file("walk.fbx")
+        target = self.controller.add_model_from_file("statue.obj")
+        self.assertEqual(self.controller.session.plan.kind, "rig_then_animation")
+        self.assertEqual(self.window.setup_view.plan_banner.start_button.text(), "Start: Rig ›")
+        self.assertEqual(len(self.window.stepper.buttons), 4)
+        self.window.start_plan()
+        self.assertIs(self.window.stack.currentWidget(), self.window.rig_view)
+        self.assertEqual(self.window.stepper.current_step, 2)
+        first = self.controller.rig_fit()
+        self.assertIn(first.root, self.window.rig_view.viewport.isolate)
+        self.window.rig_view.refit_button.click()
+        self.assertIsNot(first, self.controller.rig_fit())
+        self.window.rig_view.back_button.click()
+        self.assertIsNone(self.controller.rig_fit())
+        self.assertEqual(self.controller.session.plan.kind, "rig_then_animation")
+        self.window.start_plan()
+        self.window.rig_view.bind_button.click()
+        self.assertIs(self.window.stack.currentWidget(), self.window.match_view)
+        self.assertTrue(target.has_rig)
+        self.assertTrue(target.mesh.skinned)
+        self.assertEqual(self.controller.session.plan.kind, "animation")
+        self.assertEqual(len(self.window.stepper.buttons), 3)
+        self.assertTrue(self.controller.validate(self.controller.session.active_clip_id).ok)
+
+    def test_rig_only_bind_returns_to_setup(self):
+        self.controller.add_model_from_file("Nova.ma")
+        target = self.controller.add_model_from_file("mesh.obj")
+        self.assertEqual(self.controller.session.plan.kind, "rig")
+        self.assertEqual(len(self.window.stepper.buttons), 2)
+        self.window.start_plan()
+        self.window.rig_view.bind_button.click()
+        self.assertIs(self.window.stack.currentWidget(), self.window.setup_view)
+        self.assertTrue(target.has_rig)
+        self.assertFalse(self.controller.session.clips)
+
+    def test_removed_destination_resets_the_transferred_clip_state(self):
+        from rigflow.animation.clip import ClipStatus
+        clip = self.populated_clip()
+        self.window.open_transfer(clip.clip_id)
+        self.window.transfer_view.transfer_button.click()
+        self.assertEqual(clip.status, ClipStatus.TRANSFERRED)
+        self.window.show_setup()
+        self.controller.remove_model(self.controller.session.destination.character_id)
+        self.assertEqual(clip.status, ClipStatus.IMPORTED)
+        self.assertIsNone(clip.mapping)
+        self.assertEqual(clip.result, {})
+        self.controller.add_model_from_file("statue.obj")
+        self.window.start_plan()
+        self.assertIs(self.window.stack.currentWidget(), self.window.rig_view)
+        texts = [button.text() for button in self.window.stepper.buttons]
+        self.assertEqual(texts, ["✓ Setup", "2 Rig", "3 Match", "4 Transfer"])
+
+    def test_changing_destination_discards_old_manual_joint_names(self):
+        clip = self.populated_clip()
+        match = clip.mapping.matches["LeftHand"]
+        self.controller.set_manual_match(clip.clip_id, "LeftHand", match.source, match.destination)
+        self.controller.start_plan()
+        self.assertTrue(clip.mapping.matches["LeftHand"].manual)
+        target = self.controller.session.destination
+        self.controller.remove_model(target.character_id)
+        self.controller.add_model_from_file("statue.obj")
+        self.window.start_plan()
+        self.window.rig_view.bind_button.click()
+        self.assertIs(self.controller.session.active_clip, clip)
+        self.assertFalse(clip.mapping.matches["LeftHand"].manual)
+        self.assertTrue(self.controller.validate(clip.clip_id).ok)
+
+    def test_swap_reuse_remove_replace_and_viewport_labels(self):
+        a = self.controller.add_model_from_file("walk.fbx")
+        b = self.controller.add_model_from_file("hero.ma")
+        banner = self.window.setup_view.plan_banner
+        self.assertTrue(banner.swap_button.isVisible())
+        self.window.start_plan()
+        first_id = self.controller.session.active_clip_id
+        self.window.show_setup()
+        self.window.start_plan()
+        self.assertEqual(self.controller.session.active_clip_id, first_id)
+        self.assertEqual(len(self.controller.session.clips), 1)
+        self.window.show_setup()
+        banner.swap_button.click()
+        self.assertIs(self.controller.session.source, b)
+        self.window.start_plan()
+        self.assertEqual(self.window.match_view.source_viewport.header.text(), "Model B · hero")
+        self.assertEqual(self.window.match_view.destination_viewport.header.text(), "Model A · walk")
+        self.assertEqual(len(self.controller.session.clips), 2)
+        self.window.show_setup()
+        replacement = self.controller.replace_model_from_file(a.character_id, "Nova.ma")
+        self.assertEqual(replacement.character_id, a.character_id)
+        self.assertEqual(self.controller.session.characters[0], replacement)
+        self.assertIsNone(self.controller.session.get_clip(first_id))
+        self.window.start_plan()
+        self.window.open_transfer(self.controller.session.active_clip_id)
+        self.controller.remove_model(b.character_id)
+        self.assertIsNone(self.controller._preview_id)
+        self.assertIs(self.window.stack.currentWidget(), self.window.setup_view)
+        self.assertEqual(len(self.window.setup_view.model_cards), 1)
+        self.assertIsNone(self.controller.session.rig)
+        self.assertIsNone(self.controller.session.model)
+
+    def test_obj_drop_acceptance_and_add_menu(self):
+        from rigflow.ui.qt import QtGui
+        from rigflow.ui.widgets.drop_area import DropArea, FILE_FILTER
+        self.assertTrue(DropArea.accepts("Statue.OBJ"))
+        self.assertIn("*.obj", FILE_FILTER)
+        self.assertEqual([a.text() for a in self.window.add_menu.actions()],
+                         ["From file…", "Use Maya selection", "From scene…"])
+        mime = QtCore.QMimeData()
+        mime.setUrls([QtCore.QUrl.fromLocalFile("C:/Statue.obj")])
+        drop = QtGui.QDropEvent(QtCore.QPointF(10, 10), QtCore.Qt.CopyAction, mime,
+                               QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+        self.window.setup_view.empty_area.dropEvent(drop)
+        self.assertTrue(drop.isAccepted())
+        self.assertTrue(self.controller.session.characters[0].has_mesh)
+        self.assertFalse(self.controller.session.characters[0].has_rig)
+        card = self.window.setup_view.model_cards[0]
+        mime.setUrls([QtCore.QUrl.fromLocalFile("C:/walk.fbx")])
+        drop = QtGui.QDropEvent(QtCore.QPointF(10, 10), QtCore.Qt.CopyAction, mime,
+                               QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+        card.dropEvent(drop)
+        self.assertEqual(len(self.controller.session.characters), 1)
+        self.assertTrue(self.controller.session.characters[0].has_anim)
+
+    def test_fake_file_detection_rules(self):
+        for path, contents in (("mixamo.fbx", (False, True, True)),
+                               ("walk.ma", (False, True, True)), ("hero.ma", (True, True, True)),
+                               ("Statue.fbx", (True, False, False)), ("unknown.obj", (True, False, False)),
+                               ("Nova.ma", (True, True, False))):
+            character = self.controller._file_model(path)
+            self.assertEqual((character.has_mesh, character.has_rig, character.has_anim), contents)
+
     def test_multiple_clips_replace_remove_and_reset(self):
         clip = self.populated_clip()
         second = self.controller.add_animation_from_scene("walk_cycle:Hips")
-        self.assertEqual(self.window.clip_list.rowCount(), 2)
+        self.assertEqual(len(self.controller.session.clips), 2)
         original = clip.mapping.matches["Hips"]
         self.controller.set_manual_match(clip.clip_id, "Hips", original.source, original.destination)
         self.controller.auto_map(clip.clip_id)
@@ -159,9 +308,9 @@ class UISmokeTests(unittest.TestCase):
         self.assertFalse(clip.mapping.matches["Hips"].manual)
         replacement = self.controller.replace_animation(second.clip_id, "jump.fbx")
         self.assertEqual(replacement.clip_id, second.clip_id)
-        self.assertEqual(self.window.clip_list.rowCount(), 2)
+        self.assertEqual(len(self.controller.session.clips), 2)
         self.controller.remove_clip(clip.clip_id)
-        self.assertEqual(self.window.clip_list.rowCount(), 1)
+        self.assertEqual(len(self.controller.session.clips), 1)
 
     def test_validation_blocks_review_and_exclusion(self):
         clip = self.populated_clip()
@@ -201,6 +350,10 @@ class UISmokeTests(unittest.TestCase):
         with mock.patch.object(controller, "_service", side_effect=ImportError("scene not installed")):
             self.assertIsNone(controller.set_model_from_selection())
             self.assertEqual(controller.list_scene_skeleton_roots(), [])
+            self.assertIsNone(controller.add_model_from_file("walk.fbx"))
+            self.assertIsNone(controller.add_model_from_selection())
+            self.assertIsNone(controller.add_model_from_scene("root"))
+            self.assertEqual(controller.list_scene_candidates(), [])
         statuses = [payload for event, payload in events if event == SessionEvent.STATUS]
         self.assertEqual(statuses[-1]["level"], "error")
         self.assertIn("Service unavailable", statuses[-1]["message"])
@@ -250,8 +403,9 @@ class UISmokeTests(unittest.TestCase):
         controller = Controller(self.controller.session)
         backend = mock.Mock()
         backend.name = "matrix"
-        result_type = make_dataclass("Result", [("backend", str), ("warnings", list)])
-        backend.bake.return_value = result_type("matrix", [])
+        result_type = make_dataclass("Result", [("backend", str), ("warnings", list),
+                                                ("frame_range", tuple), ("baked_joints", list)])
+        backend.bake.return_value = result_type("matrix", [], clip.frame_range, ["pelvis_JNT"])
         old_state = dict(minTime=-10, maxTime=200, animationStartTime=-20, animationEndTime=220, loop="once")
         cmds = mock.Mock()
         cmds.playbackOptions.side_effect = lambda **kw: old_state[next(k for k in kw if k != "query")] if kw.get("query") else None
@@ -270,6 +424,8 @@ class UISmokeTests(unittest.TestCase):
             self.assertEqual(result.backend, "matrix")
             self.assertFalse(backend.prepare.call_args[0][0].bake_to_layer)
             self.assertEqual(clip.status, ClipStatus.TRANSFERRED)
+            self.assertTrue(controller.session.destination.anim.transferred)
+            self.assertEqual(controller.session.destination.anim.animated_joints, 1)
             self.assertEqual(controller._previews, {})
             self.assertIsNone(controller._playback_state)
             cmds.playbackOptions.assert_any_call(**old_state)
@@ -278,6 +434,96 @@ class UISmokeTests(unittest.TestCase):
             self.assertFalse(controller.start_preview(clip.clip_id))
             self.assertIsNone(controller._playback_state)
             self.assertGreaterEqual(backend.cleanup.call_count, 3)
+
+    def test_real_model_import_start_replace_remove_contract(self):
+        from rigflow.ui.controller import Controller
+        from rigflow.ui.fake_controller import demo_skeleton
+        controller = Controller()
+        mesh = SimpleNamespace(transform="Nova_body", vertex_count=1200, skinned=True)
+        source_scan = SimpleNamespace(name="walk", meshes=[], skeleton=SimpleNamespace(
+            root="source:Hips", animated_joints=22), has_anim=True, frame_range=(4.0, 48.0),
+            fps=24.0, warnings=["Joints only"])
+        destination_scan = SimpleNamespace(name="Nova", meshes=[mesh], skeleton=SimpleNamespace(
+            root="pelvis_JNT", animated_joints=0), has_anim=False, frame_range=None,
+            fps=24.0, warnings=[])
+        source_import = SimpleNamespace(path="walk.fbx", namespace="source", new_nodes=["source:Hips"])
+        next_import = SimpleNamespace(path="jump.fbx", namespace="next", new_nodes=["next:Hips"])
+        importer = SimpleNamespace(import_file=mock.Mock(return_value=source_import), remove_import=mock.Mock())
+        characters = SimpleNamespace(scan_import=mock.Mock(return_value=source_scan),
+                                      scan_nodes=mock.Mock(return_value=destination_scan))
+        selected = ["Nova_body"]
+        inspector = SimpleNamespace(selection=lambda: selected[:],
+            find_skeleton_roots=lambda: ["source:Hips", "pelvis_JNT", "free:Hips", "rigflowHelper"],
+            find_meshes=lambda: [mesh, SimpleNamespace(transform="unownedMesh")],
+            _is_helper=lambda node: node == "rigflowHelper")
+        services = dict(importer=importer, characters=characters, inspector=inspector,
+            skeleton_reader=SimpleNamespace(read_skeleton_rest=lambda root: demo_skeleton(root == "source:Hips")),
+            animation_io=SimpleNamespace(animation_range=lambda nodes: (4.0, 48.0), scene_fps=lambda: 24.0),
+            undo=SimpleNamespace(undo_chunk=lambda name: nullcontext()))
+        with mock.patch.object(controller, "_service", side_effect=lambda name: services[name]):
+            a = controller.add_model_from_file("walk.fbx")
+            self.assertTrue(a.has_rig and a.has_anim and not a.has_mesh)
+            self.assertEqual(a.notes, ["Joints only"])
+            self.assertEqual(a.namespace, "source")
+            b = controller.add_model_from_selection()
+            characters.scan_nodes.assert_called_once_with(["Nova_body"], "Nova_body")
+            self.assertEqual(b.mesh.vertex_count, 1200)
+            self.assertEqual(controller.list_scene_candidates(), ["free:Hips", "unownedMesh"])
+            result = controller.start_plan()
+            clip = controller.session.get_clip(result["clip_id"])
+            self.assertEqual(result["step"], "match")
+            self.assertEqual(clip.frame_range, (4.0, 48.0))
+            self.assertEqual(controller.session.rig.root, "pelvis_JNT")
+            self.assertEqual(controller.session.model.meshes, ["Nova_body"])
+            self.assertEqual(controller.start_plan()["clip_id"], clip.clip_id)
+            self.assertEqual(len(controller.session.clips), 1)
+            importer.import_file.side_effect = RuntimeError("Broken import")
+            with mock.patch("rigflow.ui.controller.LOG.exception"):
+                self.assertIsNone(controller.replace_model_from_file(a.character_id, "broken.fbx"))
+            self.assertIs(controller.session.source, a)
+            self.assertIsNotNone(controller.session.get_clip(clip.clip_id))
+            importer.import_file.side_effect = None
+            importer.import_file.return_value = next_import
+            replacement = controller.replace_model_from_file(a.character_id, "jump.fbx")
+            self.assertEqual(replacement.character_id, a.character_id)
+            self.assertEqual(controller.session.characters[0], replacement)
+            self.assertIsNone(controller.session.get_clip(clip.clip_id))
+            importer.remove_import.assert_called_once_with(source_import)
+            controller.remove_model(replacement.character_id)
+            importer.remove_import.assert_called_with(next_import)
+            self.assertIsNone(controller.session.rig)
+            self.assertIsNone(controller.session.model)
+            self.assertFalse(controller.session.clips)
+            selected[:] = []
+            self.assertIsNone(controller.add_model_from_selection())
+
+    def test_real_rig_fit_bind_services(self):
+        from rigflow.ui.controller import Controller
+        from rigflow.ui.fake_controller import demo_skeleton
+        self.controller.add_model_from_file("walk.fbx")
+        target = self.controller.add_model_from_file("statue.obj")
+        controller = Controller(self.controller.session)
+        fit = SimpleNamespace(root="Statue_Hips", joints=["Statue_Hips"], scale=0.7,
+                              skin_clusters=[], warnings=[])
+        transfer = SimpleNamespace(fit_skeleton=mock.Mock(return_value=fit),
+            remove_fit=mock.Mock(), bind_skeleton=mock.Mock(return_value=fit))
+        services = dict(undo=SimpleNamespace(undo_chunk=lambda name: nullcontext()),
+            skeleton_reader=SimpleNamespace(read_skeleton_rest=lambda root: demo_skeleton(root != "Statue_Hips")),
+            animation_io=SimpleNamespace(animation_range=lambda nodes: (1.0, 120.0), scene_fps=lambda: 24.0))
+        with mock.patch.object(controller, "_service", side_effect=lambda name: services[name]), \
+             mock.patch("rigflow.ui.controller.importlib.import_module", return_value=transfer):
+            self.assertEqual(controller.start_plan(), {"step": "rig"})
+            transfer.fit_skeleton.assert_called_once_with("mixamorig:Hips", target.mesh.meshes, namespace=None)
+            self.assertEqual(controller.rig_viewport_nodes(), target.mesh.meshes + [fit.root])
+            controller.refit_rig()
+            transfer.remove_fit.assert_called_once_with(fit)
+            result = controller.bind_rig()
+            self.assertEqual(result["step"], "match")
+            transfer.bind_skeleton.assert_called_once_with(fit, target.mesh.meshes)
+            self.assertEqual(target.rig.root, fit.root)
+            self.assertTrue(target.mesh.skinned)
+            self.assertIsNone(controller.rig_fit())
+            self.assertTrue(controller.validate(result["clip_id"]).ok)
 
     def test_singleton_and_dev_reload_launcher(self):
         # The fixture window is a valid singleton too, even with a FakeController.
