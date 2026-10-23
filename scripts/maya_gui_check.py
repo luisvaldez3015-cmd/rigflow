@@ -41,7 +41,7 @@ if ROOT is None:
 if ROOT and ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-OUT_DIR = os.path.join(tempfile.gettempdir(), "rigflow_gui_check")
+OUT_DIR = os.environ.get("RIGFLOW_GUI_OUTPUT", os.path.join(tempfile.gettempdir(), "rigflow_gui_check"))
 if not os.path.isdir(OUT_DIR):
     os.makedirs(OUT_DIR)
 
@@ -57,7 +57,8 @@ def _log(step, **data):
 
 def _grab(window, name):
     from maya import cmds
-    from rigflow.ui.qt import QtCore, QtWidgets
+    from rigflow.ui.qt import QtCore, QtGui, QtWidgets
+    from rigflow.ui.widgets.viewport_panel import ViewportPanel
 
     # Let embedded model panels paint before capturing the screen pixels.
     _pump(0.5)
@@ -65,19 +66,23 @@ def _grab(window, name):
     _pump(0.5)
     QtWidgets.QApplication.processEvents()
     path = os.path.join(OUT_DIR, name + ".png")
-    try:
-        screen = QtWidgets.QApplication.primaryScreen()
-        # Capture the desktop rectangle: grabbing Qt's window handle can return
-        # its backing store without Maya's native OpenGL child windows.
-        window.window().raise_()
-        window.window().activateWindow()
-        _pump(0.3)
-        origin = window.window().mapToGlobal(QtCore.QPoint(0, 0))
-        pixmap = screen.grabWindow(0, origin.x(), origin.y(), window.window().width(), window.window().height())
-        if pixmap.isNull():
-            pixmap = window.grab()
-    except Exception:  # pragma: no cover - fallback for odd window states
-        pixmap = window.grab()
+    # Widget capture cannot contain an unrelated application if Windows denies
+    # focus to a background check. Native OpenGL children are captured directly
+    # from their real Maya panel and composited into their actual Qt rectangle.
+    pixmap = window.grab()
+    for index, vp in enumerate(window.findChildren(ViewportPanel)):
+        if vp.isVisible() and vp.panel:
+            shot = os.path.join(OUT_DIR, "{}_viewport_{}.png".format(name, index))
+            cmds.playblast(editorPanelName=vp.panel, frame=[cmds.currentTime(q=True)],
+                           format="image", compression="png", completeFilename=shot,
+                           viewer=False, showOrnaments=False, percent=100,
+                           widthHeight=[max(64, vp.host.width()), max(64, vp.host.height())],
+                           offScreen=True, forceOverwrite=True)
+            painter = QtGui.QPainter(pixmap)
+            origin = vp.host.mapTo(window, QtCore.QPoint(0, 0))
+            painter.drawPixmap(QtCore.QRect(origin, vp.host.size()), QtGui.QPixmap(shot))
+            painter.end()
+    REPORT["capture_method"] = "Qt widget grab with live Maya viewport playblasts in their Qt rectangles"
     pixmap.save(path, "PNG")
     _log("screenshot", file=path)
     return path
@@ -245,16 +250,36 @@ def run():
     REPORT["checks"]["baked_hips_y_frame24"] = round(hips_baked[1], 3)
     REPORT["checks"]["hips_moved_up"] = hips_baked[1] > 66.0 + 10.0
 
-    # A second destination has geometry only: the plan inserts Rig before Match.
+    # A fresh scenario has an authored, skinned source and a similar mesh-only B.
     window.show_setup()
     removed = controller.remove_model(model_b.character_id)
     REPORT["checks"]["model_b_removed"] = removed is model_b
-    # Duplicate at the rest frame; the copy inherits locked channels from the skinned original.
-    cmds.currentTime(1)
+    controller.remove_model(model_a.character_id)
+    cmds.file(new=True, force=True)
+    demo = build_demo_scene(animate=False, with_face=False)
+    from rigflow.scene.demo import animate_jump
+    from rigflow.skeleton.samples import custom_roles
     copy = cmds.duplicate(demo.destination_mesh)[0]
-    for channel in ("translateX", "translateY", "translateZ"):
+    for channel in ("translateX", "translateY", "translateZ", "scaleX", "scaleY", "scaleZ"):
         cmds.setAttr(copy + "." + channel, lock=False)
+    cmds.setAttr(copy + ".scale", .8, .8, .8)
     cmds.move(200, 0, 0, copy, relative=True, worldSpace=True)
+    animate_jump(demo.destination_joints, custom_roles())
+    cmds.select(demo.destination_mesh, replace=True)
+    model_a = controller.add_model_from_selection()
+    # Dissimilar geometry must keep both cards visible and disable rig transfer.
+    sphere = cmds.polySphere(name="other_mesh")[0]
+    cmds.select(sphere, replace=True)
+    other = controller.add_model_from_selection()
+    rig_card = window.setup_view.plan_banner.rig_card
+    REPORT["checks"]["dissimilar_mesh_blocks_rig"] = bool(
+        other and controller.session.mesh_similarity.score < 80 and
+        rig_card.isVisible() and not rig_card.start_button.isEnabled() and
+        "can't be transferred" in rig_card.reason_label.text())
+    REPORT["checks"]["blocked_rig_does_not_start"] = window.start_plan("rig") is None and controller.rig_fit() is None
+    _grab(window, "07_setup_dissimilar")
+    controller.remove_model(other.character_id)
+    cmds.delete(sphere)
     REPORT["checks"]["copy_moved"] = abs(cmds.getAttr(copy + ".translateX") - 200.0) < 1e-6
     cmds.select(copy, replace=True)
     mesh_model = controller.add_model_from_selection()
@@ -263,27 +288,30 @@ def run():
     REPORT["checks"]["rig_then_animation_plan"] = controller.session.plan.kind == "rig_then_animation"
     REPORT["checks"]["rig_plan_source_a"] = controller.session.source is model_a
     REPORT["checks"]["rig_four_steps"] = len(window.stepper.buttons) == 4
+    REPORT["checks"]["similar_mesh_enables_rig"] = bool(
+        controller.session.mesh_similarity.score > 99 and rig_card.start_button.isEnabled())
+    REPORT["checks"]["animation_waits_for_rig"] = not window.setup_view.plan_banner.animation_card.start_button.isEnabled()
+    _grab(window, "07_setup_similar")
     window.start_plan()
     REPORT["checks"]["start_opens_rig"] = window.stack.currentWidget() is window.rig_view
     fit = controller.rig_fit()
     REPORT["checks"]["rig_fit_created"] = bool(fit and cmds.objExists(fit.root))
     fitted_root = fit.root if fit else None
     if fit:
-        # The fitted joints must sit inside the copy: same lowest point and centre.
-        shapes = [s for s in cmds.listRelatives(copy, shapes=True, fullPath=True)
-                  if not cmds.getAttr(s + ".intermediateObject")]
-        mesh_bounds = cmds.exactWorldBoundingBox(shapes)
+        # Mesh-normalised fitting preserves source joint positions on a scaled copy.
+        from rigflow.scene.rest_pose import rest_pose
+        with rest_pose(fit.source_joints):
+            source_points = [cmds.xform(j, q=True, ws=True, t=True) for j in fit.source_joints]
         points = [cmds.xform(j, q=True, ws=True, t=True) for j in fit.joints]
-        joint_bounds = [min(p[i] for p in points) for i in range(3)] + [max(p[i] for p in points) for i in range(3)]
         REPORT["checks"]["rig_fit_scale"] = round(fit.scale, 4)
-        REPORT["checks"]["rig_fit_inside_mesh"] = (
-            abs(joint_bounds[1] - mesh_bounds[1]) < 1e-3 and abs(joint_bounds[4] - mesh_bounds[4]) < 1e-3
-            and all(abs((joint_bounds[i] + joint_bounds[i + 3]) - (mesh_bounds[i] + mesh_bounds[i + 3])) < 1e-3
-                    for i in (0, 2)))
+        REPORT["checks"]["rig_fit_inside_mesh"] = all(
+            abs(b[i] - (a[i] * .8 + (200 if i == 0 else 0))) < 1e-3
+            for a, b in zip(source_points, points) for i in range(3))
     _grab(window, "07_rig_fit")
     _viewport_diagnostics(window, "rig_fit")
     window.rig_view.bind_button.click()
     REPORT["checks"]["bind_opens_match"] = window.stack.currentWidget() is window.match_view
+    REPORT["checks"]["started_rig_steps_preserved"] = window.stepper.names == ["Setup", "Rig", "Match", "Transfer"]
     REPORT["checks"]["bound_rig_detected"] = bool(mesh_model and mesh_model.has_rig)
     REPORT["checks"]["copy_has_skin_cluster"] = bool(
         cmds.ls(cmds.listHistory(copy) or [], type="skinCluster"))
@@ -296,8 +324,9 @@ def run():
     _viewport_diagnostics(window, "rig_transfer")
     second_result = controller.bake(second_clip.clip_id) if second_clip else None
     REPORT["checks"]["rig_bake_succeeded"] = second_result is not None
+    fitted_hips = second_clip.mapping.matches["Hips"].destination if second_clip else fitted_root
     REPORT["checks"]["fitted_hips_has_keys"] = bool(
-        fitted_root and (cmds.keyframe(fitted_root, query=True, keyframeCount=True) or 0) > 0)
+        fitted_hips and (cmds.keyframe(fitted_hips, query=True, keyframeCount=True) or 0) > 0)
     REPORT["checks"]["rig_destination_stays_b"] = controller.session.destination is mesh_model
     REPORT["checks"]["rig_animation_marked_transferred"] = bool(
         mesh_model and mesh_model.has_anim and mesh_model.anim.transferred)
@@ -318,6 +347,8 @@ def run():
         "rig_destination_stays_b", "rig_animation_marked_transferred", "copy_moved", "rig_fit_inside_mesh",
         "rig_fit_viewports_embedded", "rig_fit_hidden_viewports_released",
         "rig_transfer_viewports_embedded", "rig_transfer_hidden_viewports_released",
+        "dissimilar_mesh_blocks_rig", "blocked_rig_does_not_start", "similar_mesh_enables_rig",
+        "animation_waits_for_rig", "started_rig_steps_preserved",
     ))
 
 

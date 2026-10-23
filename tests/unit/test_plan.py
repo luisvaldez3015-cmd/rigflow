@@ -5,6 +5,7 @@ import unittest
 
 from rigflow.core.character import AnimSlot, Character, MeshSlot, RigSlot, model_label
 from rigflow.core.plan import PlanKind, derive_plan
+from rigflow.core.similarity import MeshSimilarity
 from rigflow.core.session import Session, SessionEvent
 from rigflow.mapping.matcher import label_skeleton
 from tests.unit.fixtures import build as build_skeleton, custom_spec, mixamo_spec
@@ -48,6 +49,38 @@ class CharacterTests(unittest.TestCase):
 
 
 class PlanTests(unittest.TestCase):
+    def test_both_cards_always_present_with_specific_reasons(self):
+        pairs = [
+            (character("A", mesh=True), character("B", mesh=True), "Neither model has a rig"),
+            (character("A", rig=True, anim=True), character("B", mesh=True), "joints only"),
+            (character("A", mesh=True, rig=True), character("B", mesh=True, rig=True), "already has a rig"),
+        ]
+        for a, b, reason in pairs:
+            plan = derive_plan([a, b])
+            self.assertEqual(len(plan.options), 2)
+            self.assertFalse(plan.options[0].available)
+            self.assertIn(reason, plan.options[0].reason)
+            self.assertFalse(plan.ready)
+
+    def test_similarity_threshold_missing_source_skin_and_region_data(self):
+        a, b = character("A", mesh=True, rig=True, anim=True), character("B", mesh=True)
+        for score, available in ((41, False), (79.99, False), (80, True), (96, True)):
+            result = MeshSimilarity(score, available, ["Head"])
+            plan = derive_plan([a, b], similarity=result)
+            self.assertEqual(plan.options[0].available, available)
+            self.assertIs(plan.options[0].similarity, result)
+            self.assertFalse(plan.options[1].available)
+            self.assertIn("use Transfer rig" if available else "has no rig", plan.options[1].reason)
+            self.assertEqual(plan.ready, available)
+        self.assertFalse(derive_plan([a, b]).ready)
+        a.mesh.skinned = False
+        self.assertIn("skinned mesh", derive_plan([a, b], similarity=MeshSimilarity(100, True)).options[0].reason)
+
+    def test_transferred_animation_alone_cannot_start_an_animation_process(self):
+        plan = derive_plan([character("A", rig=True, anim=True, transferred=True), character("B", rig=True)])
+        self.assertFalse(plan.options[1].available)
+        self.assertFalse(plan.ready)
+
     def test_empty_and_single_model(self):
         self.assertEqual(derive_plan([]).kind, PlanKind.EMPTY)
         self.assertFalse(derive_plan([]).ready)
@@ -70,7 +103,7 @@ class PlanTests(unittest.TestCase):
         self.assertIn("Model B is joints only (mocap).", plan.message)
         self.assertEqual(plan.steps, ["Setup", "Match", "Transfer"])
         self.assertEqual(plan.first_step, "match")
-        self.assertEqual(plan.action_label, "Start: Match ›")
+        self.assertEqual(plan.action_label, "Start Match")
         self.assertTrue(plan.ready and plan.transfers_animation)
         self.assertFalse(plan.can_swap)
 
@@ -81,17 +114,17 @@ class PlanTests(unittest.TestCase):
 
     def test_mesh_only_destination_needs_rig_first(self):
         source = character("Hero", mesh=True, rig=True, anim=True)
-        plan = derive_plan([source, character("Statue", mesh=True)])
+        plan = derive_plan([source, character("Statue", mesh=True)], similarity=MeshSimilarity(96, True))
         self.assertEqual(plan.kind, PlanKind.RIG_THEN_ANIMATION)
         self.assertEqual(plan.steps, ["Setup", "Rig", "Match", "Transfer"])
         self.assertEqual(plan.first_step, "rig")
-        self.assertEqual(plan.action_label, "Start: Rig ›")
+        self.assertEqual(plan.action_label, "Start Rig")
         self.assertIn("copy Model A's skeleton", plan.message)
         self.assertTrue(plan.transfers_animation)
 
     def test_rig_only_when_nothing_is_animated(self):
         rigged = character("Nova", mesh=True, rig=True)
-        plan = derive_plan([character("Statue", mesh=True), rigged])
+        plan = derive_plan([character("Statue", mesh=True), rigged], similarity=MeshSimilarity(96, True))
         self.assertEqual(plan.kind, PlanKind.RIG)
         self.assertEqual(plan.source_id, rigged.character_id)
         self.assertEqual(plan.steps, ["Setup", "Rig"])

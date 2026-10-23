@@ -18,6 +18,7 @@ from typing import Callable, Dict, List, Optional
 from rigflow.animation.clip import AnimationClip
 from rigflow.core.character import Character, model_label
 from rigflow.core.plan import TransferPlan, derive_plan
+from rigflow.core.similarity import MeshSimilarity
 from rigflow.mapping.model import SkeletonLabeling
 from rigflow.skeleton.model import Skeleton
 
@@ -82,6 +83,8 @@ class Session:
         self.active_clip_id: Optional[str] = None
         self.characters: List[Character] = []
         self.preferred_source_id: Optional[str] = None
+        self.mesh_similarity: Optional[MeshSimilarity] = None
+        self.started_steps: Optional[List[str]] = None
         self.plan: TransferPlan = derive_plan([])
         self._listeners: List[Listener] = []
 
@@ -108,6 +111,7 @@ class Session:
     # --- models (Setup step) ---------------------------------------------------------------
 
     def add_character(self, character: Character) -> Character:
+        self.started_steps = None
         self.characters.append(character)
         self._characters_changed()
         return character
@@ -117,6 +121,7 @@ class Session:
         if character is None:
             return None
         self.characters.remove(character)
+        self.started_steps = None
         if self.preferred_source_id == character_id:
             self.preferred_source_id = None
         self._characters_changed()
@@ -124,6 +129,7 @@ class Session:
 
     def replace_character(self, character_id: str, character: Character) -> Character:
         """Swap a model in place (same position, same id)."""
+        self.started_steps = None
         for index, existing in enumerate(self.characters):
             if existing.character_id == character_id:
                 character.character_id = character_id
@@ -160,11 +166,12 @@ class Session:
         return self.set_preferred_source(self.plan.destination_id)
 
     def recompute_plan(self) -> TransferPlan:
-        self.plan = derive_plan(self.characters, self.preferred_source_id)
+        self.plan = derive_plan(self.characters, self.preferred_source_id, self.mesh_similarity)
         self._emit(SessionEvent.PLAN_CHANGED, self.plan)
         return self.plan
 
     def _characters_changed(self) -> None:
+        self.mesh_similarity = None
         self._emit(SessionEvent.CHARACTERS_CHANGED, self.characters)
         self.recompute_plan()
 

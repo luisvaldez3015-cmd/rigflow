@@ -38,7 +38,7 @@ class UISmokeTests(unittest.TestCase):
         QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
 
     def populated_clip(self):
-        self.controller.add_model_from_file("walk_cycle.fbx")
+        self.controller.add_model_from_file("hero.ma")
         self.controller.add_model_from_selection()
         result = self.controller.start_plan()
         return self.controller.session.get_clip(result["clip_id"])
@@ -59,12 +59,12 @@ class UISmokeTests(unittest.TestCase):
         card = self.window.setup_view.model_cards[0]
         self.assertEqual(set(card.slots), {"Mesh", "Rig", "Anim"})
         self.assertEqual(card.slots["Mesh"].badge.label.text(), "None")
-        self.assertEqual(card.slots["Anim"].badge.label.text(), "Detected")
+        self.assertEqual(card.slots["Anim"].badge.label.text(), "✓ Detected")
         target = self.controller.add_model_from_selection()
         self.app.processEvents()
         banner = self.window.setup_view.plan_banner
-        self.assertIn("Transfer animation", banner.title_label.text())
-        self.assertEqual(banner.start_button.text(), "Start: Match ›")
+        self.assertIn("Transfer animation", banner.animation_card.title_label.text())
+        self.assertEqual(banner.start_button.text(), "Start Match")
         self.assertTrue(banner.isVisible())
         banner.start_button.click()
         clip = self.controller.session.active_clip
@@ -166,10 +166,10 @@ class UISmokeTests(unittest.TestCase):
             self.assertEqual(controller.selected_pair(clip.clip_id), (None, None))
 
     def test_mesh_only_destination_fit_refit_cancel_and_bind(self):
-        self.controller.add_model_from_file("walk.fbx")
-        target = self.controller.add_model_from_file("statue.obj")
+        self.controller.add_model_from_file("hero.ma")
+        target = self.controller.add_model_from_file("same.obj")
         self.assertEqual(self.controller.session.plan.kind, "rig_then_animation")
-        self.assertEqual(self.window.setup_view.plan_banner.start_button.text(), "Start: Rig ›")
+        self.assertEqual(self.window.setup_view.plan_banner.start_button.text(), "Start Rig")
         self.assertEqual(len(self.window.stepper.buttons), 4)
         self.window.start_plan()
         self.assertIs(self.window.stack.currentWidget(), self.window.rig_view)
@@ -187,8 +187,32 @@ class UISmokeTests(unittest.TestCase):
         self.assertTrue(target.has_rig)
         self.assertTrue(target.mesh.skinned)
         self.assertEqual(self.controller.session.plan.kind, "animation")
-        self.assertEqual(len(self.window.stepper.buttons), 3)
+        self.assertEqual(len(self.window.stepper.buttons), 4)
         self.assertTrue(self.controller.validate(self.controller.session.active_clip_id).ok)
+
+    def test_process_cards_similarity_replacement_and_blocked_actions(self):
+        source = self.controller.add_model_from_file("hero.ma")
+        target = self.controller.add_model_from_file("same_head.obj")
+        banner = self.window.setup_view.plan_banner
+        self.assertTrue(all(card.isVisible() for card in banner.cards))
+        self.assertEqual(banner.rig_card.similarity_label.text(), "Mesh similarity 96%")
+        self.assertEqual(banner.rig_card.differing_label.text(), "Differs around: Head")
+        self.assertTrue(banner.rig_card.start_button.isEnabled())
+        self.assertFalse(banner.animation_card.start_button.isEnabled())
+        self.assertIn("use Transfer rig", banner.animation_card.reason_label.text())
+        cached = self.controller.mesh_similarity(source, target)
+        self.assertIs(cached, self.controller.mesh_similarity(source, target))
+        for card in self.window.setup_view.model_cards:
+            self.assertFalse(any(hasattr(tile, "detail") for tile in card.slots.values()))
+        target = self.controller.replace_model_from_file(target.character_id, "other.obj")
+        self.assertEqual(banner.rig_card.similarity_label.text(), "Mesh similarity 41%")
+        self.assertFalse(banner.rig_card.start_button.isEnabled())
+        self.assertIn("can't be transferred", banner.rig_card.reason_label.text())
+        from rigflow.core.plan import PlanKind
+        self.assertIsNone(self.controller.start_plan(PlanKind.RIG))
+        self.assertIsNone(self.controller.start_plan(PlanKind.ANIMATION))
+        self.assertIsNone(self.controller.rig_fit())
+        self.assertIsNot(cached, self.controller.mesh_similarity(source, target))
 
     def test_rig_only_bind_returns_to_setup(self):
         self.controller.add_model_from_file("Nova.ma")
@@ -212,7 +236,7 @@ class UISmokeTests(unittest.TestCase):
         self.assertEqual(clip.status, ClipStatus.IMPORTED)
         self.assertIsNone(clip.mapping)
         self.assertEqual(clip.result, {})
-        self.controller.add_model_from_file("statue.obj")
+        self.controller.add_model_from_file("same.obj")
         self.window.start_plan()
         self.assertIs(self.window.stack.currentWidget(), self.window.rig_view)
         texts = [button.text() for button in self.window.stepper.buttons]
@@ -226,7 +250,7 @@ class UISmokeTests(unittest.TestCase):
         self.assertTrue(clip.mapping.matches["LeftHand"].manual)
         target = self.controller.session.destination
         self.controller.remove_model(target.character_id)
-        self.controller.add_model_from_file("statue.obj")
+        self.controller.add_model_from_file("same.obj")
         self.window.start_plan()
         self.window.rig_view.bind_button.click()
         self.assertIs(self.controller.session.active_clip, clip)
@@ -500,8 +524,8 @@ class UISmokeTests(unittest.TestCase):
     def test_real_rig_fit_bind_services(self):
         from rigflow.ui.controller import Controller
         from rigflow.ui.fake_controller import demo_skeleton
-        self.controller.add_model_from_file("walk.fbx")
-        target = self.controller.add_model_from_file("statue.obj")
+        self.controller.add_model_from_file("hero.ma")
+        target = self.controller.add_model_from_file("same.obj")
         controller = Controller(self.controller.session)
         fit = SimpleNamespace(root="Statue_Hips", joints=["Statue_Hips"], scale=0.7,
                               skin_clusters=[], warnings=[])

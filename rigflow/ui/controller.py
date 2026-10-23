@@ -17,7 +17,7 @@ from rigflow.animation.clip import AnimationClip, ClipStatus
 from rigflow.core import compat
 from rigflow.core.errors import RigFlowError, SceneError, MappingError
 from rigflow.core.logging import get_logger
-from rigflow.core.session import Session, ModelInfo, RigInfo
+from rigflow.core.session import Session, ModelInfo, RigInfo, SessionEvent
 from rigflow.core.character import Character, MeshSlot, RigSlot, AnimSlot
 from rigflow.mapping.matcher import auto_map, label_skeleton
 from rigflow.mapping.validation import ValidationReport, validate_mapping
@@ -73,6 +73,31 @@ class ControllerBase(QtCore.QObject):
         self._clip_destinations = {}
         self._fit = None
         self._fit_destination_id = None
+        self._similarity_cache = {}
+        self._similarity_unsubscribe = self.session.subscribe(self._models_changed)
+
+    def _models_changed(self, event, payload):
+        if event != SessionEvent.CHARACTERS_CHANGED:
+            return
+        # Invalidate even replacements that retain their character id.
+        self._similarity_cache.clear()
+        self.session.mesh_similarity = None
+        models = self.session.characters[:2]
+        if len(models) == 2 and all(c.has_mesh for c in models):
+            try:
+                self.session.mesh_similarity = self.mesh_similarity(*models)
+            except Exception as exc:
+                self.session.status("Could not compare meshes: {}".format(exc), "warning")
+
+    def mesh_similarity(self, a, b):
+        """Cached rest-pose comparison for the current pair of models."""
+        key = (a.character_id, b.character_id)
+        if key not in self._similarity_cache:
+            source, destination = (b, a) if b.has_rig and not a.has_rig else (a, b)
+            self._similarity_cache[key] = self._service("similarity").compare_meshes(
+                source.mesh.meshes, destination.mesh.meshes,
+                source.rig.root if source.has_rig else None)
+        return self._similarity_cache[key]
 
     def add_model_from_file(self, path):
         raise NotImplementedError
@@ -115,10 +140,15 @@ class ControllerBase(QtCore.QObject):
             rig.convention, warnings=list(rig.warnings)) if destination.has_rig else None)
 
     @action("Starting proposed process…")
-    def start_plan(self):
+    def start_plan(self, kind=None):
+        if kind is not None:
+            option = next((o for o in self.session.plan.options if o.kind == kind), None)
+            if option is None or not option.available:
+                raise SceneError(option.reason if option else "Process unavailable")
         if not self.session.plan.ready:
             raise SceneError(self.session.plan.message)
         self._stop_model_previews()
+        self.session.started_steps = self.session.plan.steps
         self._publish_destination()
         if self.session.plan.first_step == "rig":
             return {"step": "rig"} if self.fit_rig() is not None else None
@@ -432,6 +462,7 @@ class ControllerBase(QtCore.QObject):
     @action()
     def shutdown(self):
         """Pause playback and release all live preview resources."""
+        self._similarity_unsubscribe()
         self.cancel_rig_fit()
         self.pause()
         for clip in self.session.clips:
@@ -597,10 +628,14 @@ class Controller(ControllerBase):
             destination.mesh.skinned = True
         self._fit = None
         self._fit_destination_id = None
+        started_steps = self.session.started_steps
         self.session.character_updated(destination.character_id)
+        self.session.started_steps = started_steps
         if self.session.destination:
             self._publish_destination()
-        return self.start_plan() if self.session.plan.transfers_animation else {"step": "setup"}
+        result = self.start_plan() if self.session.plan.transfers_animation else {"step": "setup"}
+        self.session.started_steps = started_steps
+        return result
 
     @action(default=lambda: (None, None))
     def selected_pair(self, clip_id):
@@ -992,6 +1027,7 @@ class Controller(ControllerBase):
     @action()
     def shutdown(self):
         # View widgets normally release these first; also cover partial embeds.
+        self._similarity_unsubscribe()
         self.cancel_rig_fit()
         for panel in list(self._viewport_cameras):
             self.delete_viewport(panel)

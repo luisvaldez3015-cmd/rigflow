@@ -112,7 +112,8 @@ class MainWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
         self._update_stepper()
 
     def _update_stepper(self):
-        names = self.session.plan.steps
+        names = (self.session.started_steps if self.stack.currentWidget() is not self.setup_view
+                 and self.session.started_steps else self.session.plan.steps)
         self.stepper.set_steps(names)
         page_name = {self.setup_view: "Setup", self.rig_view: "Rig", self.match_view: "Match", self.transfer_view: "Transfer"}[self.stack.currentWidget()]
         current = names.index(page_name) + 1 if page_name in names else 1
@@ -164,8 +165,8 @@ class MainWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
         if path:
             return self.controller.replace_model_from_file(character_id, path)
 
-    def start_plan(self):
-        result = self.controller.start_plan()
+    def start_plan(self, kind=None):
+        result = self.controller.start_plan(kind)
         if result:
             self._continue_plan(result)
         return result

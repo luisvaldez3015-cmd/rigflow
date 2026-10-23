@@ -54,6 +54,7 @@ class SetupView(QtWidgets.QWidget):
         empty.addStretch()
         layout.addWidget(self.empty_area, 1)
         self.populated_area = QtWidgets.QWidget()
+        self.populated_area.setObjectName("page")
         populated = QtWidgets.QVBoxLayout(self.populated_area)
         populated.setContentsMargins(0, 0, 0, 0)
         populated.setSpacing(16)
@@ -77,16 +78,25 @@ class SetupView(QtWidgets.QWidget):
         populated.addWidget(self.second_area)
         self.plan_banner = PlanBanner()
         self.plan_banner.swap_button.clicked.connect(window.controller.swap_direction)
-        self.plan_banner.start_button.clicked.connect(window.start_plan)
+        self.plan_banner.start_requested.connect(window.start_plan)
         populated.addWidget(self.plan_banner)
         populated.addStretch(1)
-        layout.addWidget(self.populated_area, 1)
+        self.populated_scroll = QtWidgets.QScrollArea()
+        self.populated_scroll.setWidgetResizable(True)
+        self.populated_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self.populated_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.populated_scroll.setWidget(self.populated_area)
+        # Inside Maya the scroll viewport otherwise paints Maya's lighter window colour.
+        self.populated_scroll.viewport().setObjectName("page")
+        self.populated_area.setAttribute(QtCore.Qt.WA_StyledBackground, True)
+        layout.addWidget(self.populated_scroll, 1)
         self.validation_label = self.plan_banner.issues_label
 
     def refresh(self):
         characters, plan = self.session.characters, self.session.plan
         self.empty_area.setVisible(not characters)
         self.populated_area.setVisible(bool(characters))
+        self.populated_scroll.setVisible(bool(characters))
         self.caption.setText(plan.message)
         self.second_caption.setText(plan.message)
         self.second_area.setVisible(len(characters) == 1)

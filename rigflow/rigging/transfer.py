@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Sequence, Tuple
 
 from maya import cmds
+from maya.api import OpenMaya as om
 
 from rigflow.core.errors import SceneError
 from rigflow.core.logging import get_logger
@@ -14,6 +15,9 @@ from rigflow.scene.inspector import MeshInfo, _unique_name, find_meshes
 from rigflow.scene.rest_pose import rest_pose
 from rigflow.scene.skeleton_reader import _joints
 from rigflow.scene.undo import undo_chunk
+from rigflow.scene.characters import meshes_for_skeleton
+from rigflow.scene.similarity import (dag_path, skin_function, vertex_component,
+                                      meshes_at_rest, surfaces, same_topology)
 
 log = get_logger(__name__)
 
@@ -86,6 +90,8 @@ def fit_skeleton(source_root: str, meshes: Sequence[str], namespace: Optional[st
                 cmds.namespace(add=ns)
                 created_namespace = True
             with rest_pose(source_joints, stance_time):
+                source_meshes = [m for m in meshes_for_skeleton(source_root) if m.skinned]
+                source_bounds = _visible_bounds(source_meshes) if source_meshes else None
                 duplicate = cmds.duplicate(source_joints[0], inputConnections=False,
                                            upstreamNodes=False, returnRootsOnly=True)[0]
                 duplicate_uuid = cmds.ls(duplicate, uuid=True)[0]
@@ -126,7 +132,7 @@ def fit_skeleton(source_root: str, meshes: Sequence[str], namespace: Optional[st
                     cmds.rename(_resolve(uuid), ns.rstrip(":") + ":" + leaf)
             joints = [_unique_name(_resolve(u)) for u in copied_ids]
             root = joints[0]
-            bounds = _joint_bounds(joints)
+            bounds = source_bounds or _joint_bounds(joints)
             joint_height = bounds[axis + 3] - bounds[axis]
             if joint_height <= 1e-10:
                 raise SceneError("Skeleton height is zero", hint="Choose a skeleton with nonzero height along the scene up axis.")
@@ -135,7 +141,7 @@ def fit_skeleton(source_root: str, meshes: Sequence[str], namespace: Optional[st
                 translate = cmds.getAttr(joint + ".translate")[0]
                 cmds.setAttr(joint + ".translate", *(v * scale for v in translate))
                 cmds.setAttr(joint + ".radius", cmds.getAttr(joint + ".radius") * scale)
-            bounds = _joint_bounds(joints)
+            bounds = [v * scale for v in source_bounds] if source_bounds else _joint_bounds(joints)
             offset = tuple(mesh_bounds[i] - bounds[i] if i == axis else
                            (mesh_bounds[i] + mesh_bounds[i + 3] - bounds[i] - bounds[i + 3]) / 2
                            for i in range(3))
@@ -157,25 +163,122 @@ def fit_skeleton(source_root: str, meshes: Sequence[str], namespace: Optional[st
 
 
 def bind_skeleton(fit: RigFitResult, meshes: Sequence[str], max_influences: int = 4) -> RigFitResult:
-    """Bind each mesh to all fitted joints using closest-distance weights."""
+    """Copy source skin weights by index or closest normalised surface triangle.
+
+    Different shapes receive a starting point to polish by hand. Weights are
+    written with undoable ``setAttr`` calls, so undo and redo need no plug-in.
+    """
     with undo_chunk("RigFlow: bind rig"):
         meshes = _mesh_transforms(meshes)
         clusters = []
         try:
+            source_meshes = [m.transform for m in meshes_for_skeleton(fit.source_joints[0]) if m.skinned]
+            if not source_meshes:
+                raise SceneError("Source rig has no skinned mesh", hint="Choose a source mesh with skin weights to copy.")
+            with meshes_at_rest(source_meshes):
+                source, _ = surfaces(source_meshes)
+                target, _ = surfaces(meshes)
+                source_weights = []
+                for surface in source:
+                    skin = skin_function(surface.info.skin_cluster)
+                    weights, count = skin.getWeights(dag_path(surface.info.shape), vertex_component(len(surface.points)))
+                    source_weights.append((weights, count, [p.fullPathName() for p in skin.influenceObjects()]))
+            joint_map = {dag_path(s).fullPathName(): dag_path(d).fullPathName()
+                         for s, d in zip(fit.source_joints, fit.joints)}
             for mesh in meshes:
                 cluster = cmds.skinCluster(fit.joints, mesh, toSelectedBones=True, bindMethod=0,
                                            normalizeWeights=1, maximumInfluences=max_influences,
-                                           obeyMaxInfluences=True, dropoffRate=4.0,
+                                           obeyMaxInfluences=False, dropoffRate=4.0,
                                            name="rigflow_skin#")[0]
                 clusters.append(cluster)
+                skin = skin_function(cluster)
+                influences = {p.fullPathName(): i for i, p in enumerate(skin.influenceObjects())}
+                for destination in [s for s in target if s.info.transform == mesh]:
+                    compatible = [i for i, s in enumerate(source) if same_topology(s, destination)]
+                    direct = min(compatible, key=lambda i: sum((a - b).length()
+                                 for a, b in zip(source[i].points, destination.points))) if compatible else None
+                    values = om.MDoubleArray()
+                    for index, point in enumerate(destination.points):
+                        if direct is not None:
+                            surface_index, vertices, bary = direct, [index], [1.0]
+                        else:
+                            candidates = [(s.fn.getClosestPoint(point, om.MSpace.kObject), i) for i, s in enumerate(source)]
+                            (closest, face), surface_index = min(candidates, key=lambda c: (c[0][0] - point).length())
+                            vertices, bary = _triangle_weights(source[surface_index], closest, face)
+                        weights, count, source_joints = source_weights[surface_index]
+                        row = [0.0] * len(influences)
+                        for j, source_joint in enumerate(source_joints):
+                            fitted_joint = joint_map.get(source_joint)
+                            if fitted_joint in influences:
+                                row[influences[fitted_joint]] += sum(weights[v * count + j] * factor
+                                                                    for v, factor in zip(vertices, bary))
+                        total = sum(row)
+                        if total < 1e-12:
+                            raise SceneError("Source weights do not belong to the copied skeleton",
+                                             hint="Choose the skeleton influencing the source mesh.")
+                        for value in row:
+                            values.append(value / total)
+                    logical = [skin.indexForInfluenceObject(p) for p in skin.influenceObjects()]
+                    _write_weights(cluster, list(values), logical)
         except Exception as exc:
             if clusters:
                 cmds.delete(clusters)
+            if isinstance(exc, SceneError):
+                raise
             raise SceneError("Could not bind fitted skeleton: {}".format(exc),
                              hint="Keep the fitted joints in the scene and choose unskinned meshes.") from exc
         fit.skin_clusters.extend(clusters)
         log.info("Bound %d meshes to %s", len(clusters), fit.root)
         return fit
+
+
+def _write_weights(cluster: str, values: List[float], logical: List[int]) -> None:
+    """Write one weight row per vertex with plain ``setAttr`` calls.
+
+    Maya records each call in the open undo chunk, so undo and redo restore the
+    copied weights without loading a plug-in (about 1 s for 20k vertices).
+    """
+    count = len(logical)
+    contiguous = logical == list(range(logical[0], logical[0] + count)) if count else False
+    previous = cmds.getAttr(cluster + ".normalizeWeights")
+    cmds.setAttr(cluster + ".normalizeWeights", 0)
+    try:
+        for vertex in range(len(values) // count):
+            row = values[vertex * count:(vertex + 1) * count]
+            plug = "{}.weightList[{}].weights".format(cluster, vertex)
+            if contiguous:
+                cmds.setAttr("{}[{}:{}]".format(plug, logical[0], logical[-1]), *row, size=count)
+            else:
+                for index, value in zip(logical, row):
+                    cmds.setAttr("{}[{}]".format(plug, index), value)
+    finally:
+        cmds.setAttr(cluster + ".normalizeWeights", previous)
+
+
+def _triangle_weights(surface, point, face):
+    """Barycentric weights at the closest point on a triangulated polygon."""
+    triangle_counts, vertices = surface.triangles
+    start = sum(triangle_counts[:face]) * 3
+    best = None
+    for offset in range(start, start + triangle_counts[face] * 3, 3):
+        ids = list(vertices[offset:offset + 3])
+        a, b, c = [surface.points[i] for i in ids]
+        v0, v1, v2 = b - a, c - a, point - a
+        d00, d01, d11 = v0 * v0, v0 * v1, v1 * v1
+        denominator = d00 * d11 - d01 * d01
+        if abs(denominator) < 1e-20:
+            continue
+        v = (d11 * (v2 * v0) - d01 * (v2 * v1)) / denominator
+        w = (d00 * (v2 * v1) - d01 * (v2 * v0)) / denominator
+        bary = [1 - v - w, v, w]
+        penalty = sum(max(0, -x) for x in bary)
+        if best is None or penalty < best[0]:
+            best = penalty, ids, bary
+    if best is None:
+        ids = list(surface.fn.getPolygonVertices(face))
+        return [min(ids, key=lambda i: (surface.points[i] - point).length())], [1.0]
+    bary = [max(0, x) for x in best[2]]
+    return best[1], [x / sum(bary) for x in bary]
 
 
 def remove_fit(fit: RigFitResult) -> None:

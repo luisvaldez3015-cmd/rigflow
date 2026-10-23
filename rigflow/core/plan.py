@@ -24,6 +24,8 @@ from enum import Enum
 from typing import List, Optional, Sequence
 
 from rigflow.core.character import Character, model_label
+from rigflow.core.config import MESH_SIMILARITY_THRESHOLD
+from rigflow.core.similarity import MeshSimilarity
 
 
 class PlanKind(str, Enum):
@@ -43,6 +45,21 @@ _STEPS = {
 
 
 @dataclass
+class ProcessOption:
+    """One always-visible Setup action; scene similarity is supplied as data."""
+
+    kind: PlanKind
+    source_id: Optional[str]
+    destination_id: Optional[str]
+    available: bool
+    reason: str
+    action_label: str
+    similarity: Optional[MeshSimilarity] = None
+    title: str = ""
+    can_swap: bool = False
+
+
+@dataclass
 class TransferPlan:
     """What the Setup step proposes once the models are known."""
 
@@ -53,6 +70,7 @@ class TransferPlan:
     message: str = ""
     issues: List[str] = field(default_factory=list)
     can_swap: bool = False
+    options: List[ProcessOption] = field(default_factory=list)
 
     @property
     def ready(self) -> bool:
@@ -73,7 +91,7 @@ class TransferPlan:
 
     @property
     def action_label(self) -> str:
-        return {"match": "Start: Match ›", "rig": "Start: Rig ›"}.get(self.first_step, "")
+        return {"match": "Start Match", "rig": "Start Rig"}.get(self.first_step, "")
 
     @property
     def transfers_animation(self) -> bool:
@@ -92,20 +110,17 @@ def _describe(character: Character, label: str) -> str:
 def _pick_source(a: Character, b: Character, preferred: Optional[str]):
     """Return (source, destination, note) following the owner's rules."""
     for candidate, other in ((a, b), (b, a)):
-        if preferred == candidate.character_id and candidate.has_anim:
+        if preferred == candidate.character_id and candidate.has_authored_anim:
             return candidate, other, None
     authored = [c for c in (a, b) if c.has_authored_anim]
-    animated = [c for c in (a, b) if c.has_anim]
     if len(authored) == 1:
         return authored[0], b if authored[0] is a else a, None
-    if len(animated) == 1:
-        return animated[0], b if animated[0] is a else a, None
-    if len(animated) == 2:
+    if len(authored) == 2:
         return a, b, "Both models are animated; Model A is used as the source. Swap the direction if needed."
     return None, None, None
 
 
-def derive_plan(characters: Sequence[Character], preferred_source_id: Optional[str] = None) -> TransferPlan:
+def _default_plan(characters: Sequence[Character], preferred_source_id: Optional[str] = None) -> TransferPlan:
     """Build the plan for the models in Setup order (only the first two take part)."""
     if not characters:
         return TransferPlan(PlanKind.EMPTY, title="Add a model",
@@ -143,7 +158,7 @@ def derive_plan(characters: Sequence[Character], preferred_source_id: Optional[s
     if note:
         issues.append(note)
     src_label, dst_label = labels[characters.index(source)], labels[characters.index(destination)]
-    can_swap = a.has_anim and b.has_anim
+    can_swap = a.has_authored_anim and b.has_authored_anim
     if not source.has_rig:
         issues.append("{} is animated but its skeleton could not be read.".format(src_label))
         return TransferPlan(PlanKind.NOTHING, source.character_id, destination.character_id,
@@ -168,3 +183,53 @@ def derive_plan(characters: Sequence[Character], preferred_source_id: Optional[s
     issues.append("{} has neither a mesh nor a rig.".format(dst_label))
     return TransferPlan(PlanKind.NOTHING, source.character_id, destination.character_id,
                         "Nothing to transfer", description, issues, can_swap)
+
+
+def derive_plan(characters: Sequence[Character], preferred_source_id: Optional[str] = None,
+                similarity: Optional[MeshSimilarity] = None) -> TransferPlan:
+    """Derive both cards without touching the scene; missing comparisons block rigging."""
+    plan = _default_plan(characters, preferred_source_id)
+    if len(characters) < 2:
+        return plan
+    a, b = characters[:2]
+    label = lambda c: model_label(0 if c is a else 1)
+    rig_source, rig_target = next(((s, d) for s, d in ((a, b), (b, a))
+                                 if s.has_rig and not d.has_rig), (a, b))
+    if not a.has_rig and not b.has_rig:
+        reason = "Neither model has a rig"
+    elif a.has_rig and b.has_rig:
+        reason = "{} already has a rig".format(label(rig_target))
+    elif not rig_source.has_mesh:
+        reason = "{} has no mesh to compare (joints only)".format(label(rig_source))
+    elif not rig_source.mesh.skinned:
+        reason = "{} has no skinned mesh to copy weights from".format(label(rig_source))
+    elif not rig_target.has_mesh:
+        reason = "{} has no mesh to receive the rig".format(label(rig_target))
+    elif similarity is None:
+        reason = "Mesh similarity is unavailable — compare the models again"
+    elif similarity.score < MESH_SIMILARITY_THRESHOLD:
+        reason = "Model A and Model B meshes don't match ({:.0f} %) — the rig can't be transferred".format(similarity.score)
+    else:
+        reason = ""
+    rig = ProcessOption(PlanKind.RIG, rig_source.character_id, rig_target.character_id,
+                        not reason, reason, "Start Rig", similarity,
+                        "Transfer rig · {} → {}".format(label(rig_source), label(rig_target)))
+    source, target, _ = _pick_source(a, b, preferred_source_id)
+    source, target = (source, target) if source is not None else (a, b)
+    if not source.has_authored_anim:
+        reason = "Neither model has authored animation"
+    elif not source.has_rig:
+        reason = "{} has no readable source rig".format(label(source))
+    elif not target.has_rig:
+        reason = "{} needs a rig first — use Transfer rig".format(label(target)) if rig.available else "{} has no rig".format(label(target))
+    else:
+        reason = ""
+    animation = ProcessOption(PlanKind.ANIMATION, source.character_id, target.character_id,
+                              not reason, reason, "Start Match", title=
+                              "Transfer animation · {} → {}".format(label(source), label(target)),
+                              can_swap=a.has_authored_anim and b.has_authored_anim)
+    plan.options = [rig, animation]
+    if plan.first_step == "rig" and not rig.available:
+        plan.kind = PlanKind.NOTHING
+        plan.message = rig.reason
+    return plan

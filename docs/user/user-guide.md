@@ -32,26 +32,32 @@ also detects its skeleton.
 
 RigFlow creates a **Model A** card with three small detection slots:
 
-- **Mesh**: geometry and vertex count.
-- **Rig**: detected skeleton and joint count.
-- **Anim**: detected animation and frame count.
+- **Mesh**: detected polygon geometry.
+- **Rig**: detected skeleton.
+- **Anim**: detected animation.
 
-Each slot says **Detected** or **None**; hover it for details such as skinning,
+Each slot says **✓ Detected** or **None**; hover it for details such as skinning,
 root joint, naming convention, required roles or frame range. Slots fill
 automatically when you add the model. **Replace…**, or dropping a file on a
 card, replaces the entire model. **Remove** removes the model and its owned
 import; models taken from the existing Maya scene remain in that scene.
 
 Press the small **+ · Add the second model** below the first card to add
-**Model B**. The two cards sit side by side. The banner below them explains
-the proposed process and direction:
+**Model B**. The two model cards sit side by side. Two process cards below
+them always show what is available, its direction and any blocking reason:
 
-- Animated source and rigged destination: **Start: Match ›**.
-- Rigged source and mesh-only destination: **Start: Rig ›**, followed by
-  Match and Transfer when the source is animated.
+- **Transfer rig**: **Start Rig** copies a skinned source skeleton and its
+  weights onto a mesh-only destination. Rest-pose mesh similarity must be at
+  least **80%**. The percentage, bar and **Meshes match / Meshes don't match**
+  verdict explain the comparison. **Differs around: Head**, for example,
+  identifies a region to polish manually after binding.
+- **Transfer animation**: **Start Match** is available when the source has
+  authored animation and the destination has a rig. A mesh-only destination
+  needs Transfer rig first. A joints-only source can transfer animation but
+  cannot supply skin weights for rig transfer.
 - Both models animated: Model A is the default source. **Swap direction**
   makes Model B the source instead.
-- No transferable content: the banner explains what is missing.
+- Unavailable processes stay visible with disabled buttons and a reason.
 
 Starting the plan matches the joints automatically. The step indicator updates
 to the proposed process.
@@ -60,9 +66,13 @@ to the proposed process.
 
 RigFlow copies the source skeleton and fits it to the destination mesh. The
 viewport isolates the mesh and fitted skeleton; the line below shows scale
-and joint count. Move joints in Maya if needed, then press **Bind skin ›**.
-This skins the mesh and opens Match if the source is animated. **Refit**
-discards the current fit and fits a fresh copy; **‹ Back** removes the unbound
+and joint count. Move joints in Maya if needed, then press **Bind skin**.
+This copies the source skin weights and opens Match if the source is animated.
+Identical topology copies weights exactly by vertex index; different topology
+uses the nearest surface and interpolates weights. Position and uniform scale
+differences are normalised. Different regions are a starting point: polish
+their weights by hand. **Refit**
+discards the current fit and fits a fresh copy; **Back** removes the unbound
 fit and returns to Setup. With an unanimated source, binding completes the
 rig transfer and returns to Setup.
 
@@ -84,7 +94,7 @@ the joints you click.
   confidence, manual, exclude) with the two joint hierarchies, **Save / Load
   preset…** and **Reset to automatic**.
 
-The line under the viewports shows the validation result. **Next: Transfer ›**
+The line under the viewports shows the validation result. **Transfer**
 is enabled as soon as there are no errors. See the Skeleton Matching Guide
 for how the automatic matching decides.
 
@@ -100,7 +110,7 @@ scrub the timeline. Nothing is written yet.
   result card: backend, layer name, joints baked, bone-length error, time.
 - **New anim** returns to Setup and opens a file chooser to replace the
   source model with the next animation. The destination stays loaded.
-- **Done** returns to Setup. **‹ Back** returns to Match to fix something.
+- **Done** returns to Setup. **Back** returns to Match to fix something.
 
 The Animation Transfer Guide explains the backends, the baking options and
 the checks RigFlow performs on every bake.

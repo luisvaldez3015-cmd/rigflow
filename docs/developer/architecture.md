@@ -48,7 +48,7 @@ Rules:
 | `ValidationReport` | `rigflow.mapping.validation` | Errors block transfer; warnings are shown. |
 | `AnimationClip`, `ClipStatus` | `rigflow.animation.clip` | One source animation and its state. |
 | `Character`, `MeshSlot`, `RigSlot`, `AnimSlot`, `model_label()` | `rigflow.core.character` | One *model* added in Setup and the three slots RigFlow detected on it. |
-| `TransferPlan`, `PlanKind`, `derive_plan()` | `rigflow.core.plan` | What the Setup step proposes for the models (source, destination, steps). |
+| `TransferPlan`, `ProcessOption`, `PlanKind`, `derive_plan()` | `rigflow.core.plan` | What the Setup step proposes for the models (source, destination, steps). |
 | `Session`, `ModelInfo`, `RigInfo`, `SessionEvent` | `rigflow.core.session` | Observable app state: models + plan, active destination, clips. |
 | sample specs (`mixamo_spec`, `custom_spec`...) | `rigflow.skeleton.samples` | Canonical demo characters shared by tests, UI preview and `rigflow.scene.demo`. |
 
@@ -143,8 +143,8 @@ three slots. With two models the plan decides the process (see
 | Model A | Model B | Plan | Steps |
 |---------|---------|------|-------|
 | animated (any) | has a rig | `ANIMATION` (A → B) | Setup → Match → Transfer |
-| animated (any) | mesh only | `RIG_THEN_ANIMATION` | Setup → Rig → Match → Transfer |
-| rig, no anim | mesh only | `RIG` | Setup → Rig |
+| animated + skinned mesh | similar mesh only (≥80%) | `RIG_THEN_ANIMATION` | Setup → Rig → Match → Transfer |
+| rig + skinned mesh, no anim | similar mesh only (≥80%) | `RIG` | Setup → Rig |
 | both animated | both rigged | `ANIMATION`, A is the source, **Swap** allowed | Setup → Match → Transfer |
 | neither animated, both rigged | | `NOTHING` | Setup |
 
@@ -168,11 +168,22 @@ class PlanKind(str, Enum): EMPTY, NEED_SECOND, ANIMATION, RIG_THEN_ANIMATION, RI
 @dataclass class TransferPlan: kind; source_id; destination_id; title; message; issues; can_swap
                            # .ready, .steps (["Setup","Match","Transfer"] / ["Setup","Rig","Match","Transfer"] /
                            # ["Setup","Rig"] / ["Setup"]), .first_step ("match"|"rig"|None),
-                           # .action_label ("Start: Match ›"|"Start: Rig ›"), .transfers_animation
-def derive_plan(characters, preferred_source_id=None) -> TransferPlan   # only the first two models take part
+                           # .action_label ("Start Match"|"Start Rig"), .transfers_animation
+TransferPlan.options: List[ProcessOption]  # [RIG, ANIMATION], always two with two models
+@dataclass class ProcessOption: kind; source_id; destination_id; available; reason; action_label
+                               similarity: Optional[MeshSimilarity]; title; can_swap
+@dataclass class MeshSimilarity: score: float; matches: bool; differing: List[str]
+
+def derive_plan(characters, preferred_source_id=None, similarity=None) -> TransferPlan
+    # Only the first two models take part. Similarity is an INPUT; core never imports Maya.
+    # RIG requires a skinned source, mesh-only target and score >= config.MESH_SIMILARITY_THRESHOLD (80%).
+    # Missing/failed comparison blocks RIG. Animation requires authored source animation and both rigs.
+    # Both authored animated defaults A→B, with swap. Transferred animation is never a source.
 
 # rigflow/core/session.py  (done)
 Session.characters: List[Character]; Session.plan: TransferPlan; Session.preferred_source_id
+Session.mesh_similarity: Optional[MeshSimilarity]; Session.started_steps: Optional[List[str]]
+# started_steps preserves the started Rig/Match/Transfer process after binding changes the default plan.
 Session.add_character(c) / remove_character(id) / replace_character(id, c) / character_updated(id)
 Session.get_character(id) / label_for(id) / set_preferred_source(id) / swap_direction() / recompute_plan()
 Session.source / Session.destination  (Characters of the current plan, or None)
@@ -229,16 +240,22 @@ def fit_skeleton(source_root: str, meshes: Sequence[str], namespace: Optional[st
     #    (duplicate without input connections, then cut any keys that slipped through); parent it to the world.
     # 2. Rename: strip the source namespace; place the new joints in ``namespace`` when given (create it)
     #    or in the root namespace; let Maya uniquify clashes. Record the final names.
-    # 3. Fit: exactWorldBoundingBox(meshes) vs the bounding box of the new joints' world positions.
-    #    scale = mesh height / joint height along the scene up axis. Multiply every new joint's local
+    # 3. Fit: visible destination mesh bounds vs source skinned mesh bounds at rest (joint bounds fallback).
+    #    scale = destination mesh height / source height along the scene up axis. Multiply every new joint's local
     #    translate (root included) by scale and scale the joint radius. Then move the root so the joints'
     #    lowest point sits on the mesh's lowest point and the joint bbox centre matches the mesh centre
     #    on the other two axes. Orientations are untouched (uniform scaling keeps them valid).
     # Errors (SceneError + hint): no meshes, a mesh already skinned, zero mesh or joint height.
 def bind_skeleton(fit: RigFitResult, meshes: Sequence[str], max_influences: int = 4) -> RigFitResult
-    # One undo chunk "RigFlow: bind rig". Per mesh: cmds.skinCluster(fit.joints, mesh, toSelectedBones=True,
-    # bindMethod=0, normalizeWeights=1, maximumInfluences=max_influences, obeyMaxInfluences=True,
-    # dropoffRate=4.0, name="rigflow_skin#"). Fills fit.skin_clusters and returns fit.
+    # One undo chunk "RigFlow: bind rig". Requires a source skinned mesh.
+    # Snapshot source rest meshes/weights; create destination skinClusters on fit.joints.
+    # Same polygon connectivity → exact vertex-index copy. Other topologies → nearest
+    # normalised source surface + barycentric triangle interpolation. Map source influences
+    # through fit.source_joints → fit.joints; normalise, write rows with setAttr
+    # (recorded by the undo chunk: undo/redo work without a plug-in).
+    # max_influences controls initial binding only; copied source weights are not truncated.
+    # Fills fit.skin_clusters. Differing regions are a starting point, polish by hand.
+
 def remove_fit(fit: RigFitResult) -> None
     # Delete the new joints (skinClusters go with them); tolerate repeated removal; one undo chunk.
 ```
@@ -252,7 +269,7 @@ def list_scene_candidates(self) -> List[str]                      # skeleton roo
 def remove_model(self, character_id) -> Optional[Character]       # stops previews, removes clips, owned import nodes, resets session.model/rig
 def replace_model_from_file(self, character_id, path) -> Optional[Character]   # load first, then remove the old one (same position)
 def swap_direction(self) -> TransferPlan
-def start_plan(self) -> Optional[dict]
+def start_plan(self, kind=None) -> Optional[dict]
     # Publishes session.model (ModelInfo) and session.rig (RigInfo) from the plan's destination.
     # ANIMATION: clip for the source's rig root (reuse the clip already created for this source), auto_map,
     #            set active → {"step": "match", "clip_id": ...}
@@ -275,17 +292,20 @@ UI (`rigflow/ui`):
 - `setup_view.py`: `add_tile` (big, shown when there are no models) inside `empty_area`
   ("Add a model", drop accepts .ma/.mb/.fbx/.obj); `models_row` with one `ModelCard`
   per model (`model_cards`); `small_add_tile` + "Add the second model" when exactly one model;
-  `plan_banner` (`PlanBanner`) when two or more. No Validate button: the banner's `start_button`
-  (primary, text = `plan.action_label`) calls `MainWindow.start_plan()`.
+  `plan_banner` (`PlanBanner`) when two or more. It contains stacked `rig_card` and
+  `animation_card` (`ProcessCard`), always visible. Each renders a ProcessOption,
+  similarity/verdict/regions (rig only), a disabled reason when blocked and a
+  Start Rig / Start Match button. `start_requested(kind)` calls MainWindow.start_plan(kind).
+  Swap direction appears only on the animation card when both have authored animation.
 - `widgets/model_card.py`: `ModelCard` with `title_label` ("Model A"), `name_label`, `slots`
-  dict {"Mesh","Rig","Anim"} → tiles with `badge` ("Detected"/"None") and `detail`,
+  dict {"Mesh","Rig","Anim"} → tiles with a green accent and `badge` ("✓ Detected"/"None"),
   `replace_button`, `remove_button`; signals `replace_requested(str)`, `remove_requested(str)`,
   `file_dropped(str, str)`; `set_character(character, label)`.
-- `widgets/plan_banner.py`: `PlanBanner` with `title_label`, `message_label`, `issues_label`,
+- `widgets/plan_banner.py`: `PlanBanner` with `rig_card`, `animation_card`, `issues_label`,
   `swap_button`, `start_button`; `set_plan(plan)`.
 - `rig_view.py`: `RigView(controller)` page: `title`, `viewport` (ViewportPanel isolating
   `controller.rig_viewport_nodes()`), `info_label` (scale, joints, "move joints in Maya if needed,
-  then Bind"), `back_button` (cancels the fit), `refit_button`, `bind_button` (primary "Bind skin ›");
+  then Bind"), `back_button` (cancels the fit), `refit_button`, `bind_button` (primary "Bind skin");
   signals `back_requested()`, `bound(dict)`; `set_fit(fit)`, `activate()`, `deactivate()`, `dispose()`.
 - `widgets/step_indicator.py`: `set_steps(names)` (dynamic, from `plan.steps`) + `set_state(...)`.
 - `main_window.py`: pages setup / rig / match / transfer. `start_plan()`, `open_rig()`,
@@ -341,6 +361,20 @@ def get_retargeter(preferred: Optional[str] = None) -> Retargeter   # HIK if ava
 Both backends must: run inside an undo chunk; use `rest_pose` for the source
 stance; never write keys outside `request.frame_range`; only touch destination
 joints present in `mapping.complete_pairs()`; delete only nodes they created.
+
+## Contract: mesh similarity (Setup, 2026-10-23)
+
+`rigflow.core.similarity.MeshSimilarity(score, matches, differing)` is pure data.
+`rigflow.scene.similarity.compare_meshes(source_meshes, destination_meshes, source_root=None)`
+compares visible shapes at rest (ignores intermediate Orig shapes), restores pose/time/
+connections and leaves the undo queue intact. Both models normalise to unit height
+along Maya's up axis, with bottoms and horizontal bbox centres aligned. Same polygon
+connectivity compares corresponding vertices; other topology samples at most 2000
+vertices per model and uses symmetric closest-surface fractions within 3% height.
+Dominant source influences identify poorly matching regions, preferring canonical roles.
+Controller caches by character-id pair and invalidates on model/slot changes. External
+scene geometry edits require re-adding the model. FakeController documents deterministic
+stem rules: twin/copy/same →96%, statue/other →41%, otherwise 92%, head →Head region.
 
 ## Contract: `rigflow.ui`
 

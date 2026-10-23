@@ -24,16 +24,13 @@ class ModelCard(SectionCard):
         self.slots = {}
         for name in ("Mesh", "Rig", "Anim"):
             tile = QtWidgets.QFrame()
-            tile.setStyleSheet("QFrame { background: #353535; border-radius: 5px; }")
+            tile.setObjectName("detectionSlot")
             column = QtWidgets.QVBoxLayout(tile)
             column.setContentsMargins(10, 10, 10, 10)
             column.setSpacing(8)
             column.addWidget(theme.label(name, heading=True))
             tile.badge = StatusBadge("None", theme.GRAY)
             column.addWidget(tile.badge, 0, QtCore.Qt.AlignLeft)
-            tile.detail = theme.label("", muted=True)
-            tile.detail.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
-            column.addWidget(tile.detail)
             row.addWidget(tile, 1)
             self.slots[name] = tile
         self.body.addLayout(row)
@@ -60,8 +57,9 @@ class ModelCard(SectionCard):
         }
         for name, (present, detail, slot) in values.items():
             tile = self.slots[name]
-            tile.badge.set_status("Detected" if present else "None", theme.GREEN if present else theme.GRAY)
-            tile.detail.setText(detail)
+            tile.badge.set_status("✓ Detected" if present else "None", theme.GREEN if present else theme.GRAY)
+            tile.setStyleSheet("QFrame#detectionSlot { background: %s; border-radius: 5px; border-bottom: 2px solid %s; }" %
+                              ("#353b37" if present else "#303030", theme.GREEN if present else "#414141"))
             tile.setToolTip(slot.describe() if slot else detail)
 
     def dragEnterEvent(self, event):

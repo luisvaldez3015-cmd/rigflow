@@ -31,10 +31,11 @@ live HumanIK preview at frame 24 before baking.
 ## What RigFlow does
 
 - Works with whole models: add a scene, FBX, OBJ or Maya selection and RigFlow
-  detects the mesh, the rig and the animation it brings, then proposes the
-  process for the two models you added.
-- Copies a skeleton onto a mesh-only model (fit to its height, bind) when the
-  destination has no rig yet.
+  detects mesh, rig and animation with checkmarked slots. Two process cards
+  explain availability and direction: **Transfer rig** and **Transfer animation**.
+- Compares meshes at rest (80% minimum for rig transfer), identifies differing
+  joint regions and copies the source skeleton and skin weights onto a mesh-only
+  model. Same-topology weights are exact, including shifted and scaled copies.
 - Labels both skeletons against a canonical humanoid template using joint
   names **and** hierarchy topology, with a confidence score for every joint.
 - Shows the proposed source-to-destination joint matches with green / yellow /
@@ -48,7 +49,7 @@ live HumanIK preview at frame 24 before baking.
 
 - It does not retarget facial animation.
 - The rig it copies onto a mesh-only model is a starting point (uniform fit,
-  closest-distance skin weights), not a production rig.
+  interpolated source weights where shapes differ), not a production rig.
 - It does not guarantee results on arbitrary non-humanoid or heavily
   customised rigs. Common humanoid skeletons come first.
 - It does not bake onto animation controls of FK/IK rigs in v1; it bakes onto
@@ -81,14 +82,14 @@ import rigflow; rigflow.launch()
 ```
 
 Or simply **Help → Create demo scene** inside RigFlow: it adds both models
-and detects their contents. Press **Start: Match ›**, **Next: Transfer ›**,
+and detects their contents. Press **Start Match**, **Transfer**,
 then **Transfer**. After building the scene from Python, add `mixamorig:Hips`
 and the destination mesh using **+ → From scene…** or **Use Maya selection**.
 
 **Setup** works with whole models: add a `.ma`, `.mb`, `.fbx`, `.obj` or Maya
 selection, and each model card shows its detected Mesh / Rig / Anim slots.
-Add the second model and start the proposed process. A mesh-only destination
-adds **Rig** (fit and bind the source skeleton) before **Match** (source and
+Add the second model and choose an available process. A similar mesh-only destination
+adds **Rig** (fit the source skeleton and copy its weights) before **Match** (source and
 destination viewports with Match / Unmatch) and **Transfer** (live preview
 and bake). **Swap direction** chooses the source when both are animated;
 **New anim** replaces the source while keeping the destination.

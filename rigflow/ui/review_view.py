@@ -111,7 +111,7 @@ class ReviewView(QtWidgets.QWidget):
         side.addWidget(self.done_button)
         side.addStretch()
         footer = QtWidgets.QHBoxLayout()
-        self.back_button = theme.button("‹ Back", "Stop the live preview and return to Match.", self.back)
+        self.back_button = theme.button("Back", "Stop the live preview and return to Match.", self.back)
         footer.addWidget(self.back_button)
         footer.addStretch()
         layout.addLayout(footer)

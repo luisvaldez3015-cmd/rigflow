@@ -71,6 +71,11 @@ MAX_CHAIN_JOINTS = 10
 
 # --- Retargeting ------------------------------------------------------------------
 
+#: Minimum normalised mesh similarity (%) required to copy a rig and its weights.
+MESH_SIMILARITY_THRESHOLD = 80.0
+#: Surface distance tolerance as a fraction of normalised mesh height.
+MESH_SIMILARITY_TOLERANCE = 0.03
+
 #: Height ratios outside this range usually mean a unit mismatch (cm vs m).
 SUSPICIOUS_SCALE_RATIO_MIN = 0.2
 SUSPICIOUS_SCALE_RATIO_MAX = 5.0

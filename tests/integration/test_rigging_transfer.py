@@ -136,7 +136,7 @@ class RiggingTransferTests(unittest.TestCase):
         self.assertTrue(cmds.objExists(control))
 
     def test_bind_normalized_weights_deformation_and_repeated_removal(self):
-        fit = fit_skeleton(self.demo.source_root, [self.mesh], namespace="bound")
+        fit = fit_skeleton(self.demo.destination_root, [self.mesh], namespace="bound")
         self.assertIs(bind_skeleton(fit, [self.mesh]), fit)
         self.assertEqual(len(fit.skin_clusters), 1)
         cluster = fit.skin_clusters[0]
@@ -218,7 +218,7 @@ class RiggingTransferTests(unittest.TestCase):
                                    (mesh[i] + mesh[i + 3]) / 2, delta=1e-4)
 
     def test_fitted_bound_skeleton_maps_and_bakes_with_default_backend(self):
-        fit = fit_skeleton(self.demo.source_root, [self.mesh], namespace="transfer", stance_time=1)
+        fit = fit_skeleton(self.demo.destination_root, [self.mesh], namespace="transfer", stance_time=1)
         bind_skeleton(fit, [self.mesh])
         mapping, _, _ = auto_map(read_skeleton_rest(self.demo.source_root), read_skeleton_rest(fit.root))
         self.assertEqual(len(REQUIRED_ROLES), 15)
@@ -231,7 +231,8 @@ class RiggingTransferTests(unittest.TestCase):
         self.assertTrue(backend.prepared)
         result = backend.bake()
         self.assertFalse(backend.prepared)
-        self.assertIn(fit.root, result.baked_joints)
-        self.assertTrue(has_animation(fit.root))
-        self.assertEqual(cmds.keyframe(fit.root, attribute="translateY", query=True, keyframeCount=True), 48)
-        self.assertNotEqual(sf.world_position(fit.root, 1), sf.world_position(fit.root, 24))
+        hips = mapping.matches["Hips"].destination
+        self.assertIn(hips, result.baked_joints)
+        self.assertTrue(has_animation(hips))
+        self.assertEqual(cmds.keyframe(hips, attribute="translateY", query=True, keyframeCount=True), 48)
+        self.assertNotEqual(sf.world_position(hips, 1), sf.world_position(hips, 24))

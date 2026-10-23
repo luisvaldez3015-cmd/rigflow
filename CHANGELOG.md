@@ -7,6 +7,13 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Setup has checkmarked detection slots and two always-visible process cards
+  with short Start Rig / Start Match buttons and explicit unavailable reasons.
+  Rest-pose, normalised mesh similarity gates rig transfer at 80% and identifies
+  differing influence regions. Pure plan options and deterministic fake support.
+- Rig binding copies source skin weights: exact vertex-index copy for identical
+  topology, closest-triangle interpolation otherwise, independent of position and
+  uniform scale. Bulk API weights support Undo/Redo through a small Maya command.
 - Model-based Setup (owner's redesign): one **Add** per model (`.ma`, `.mb`,
   `.fbx`, `.obj` or the Maya selection); RigFlow detects the Mesh / Rig / Anim
   slots of each model, shows Model A and Model B side by side and proposes the
@@ -15,8 +22,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
   `rigflow.scene.characters`).
 - **Rig** step for mesh-only destinations: the source skeleton is copied at
   rest, fitted to the mesh height (visible shapes only) and position, shown in
-  a viewport for adjustment, then bound with closest-distance weights
-  (`rigflow.rigging`). Identical topology means Match is all green afterwards.
+  a viewport for adjustment, then bound with copied source weights
+  (`rigflow.rigging`).
 - Transferred animation is recorded on the destination model so it stays the
   destination; **New anim** replaces the source model. OBJ import. The in-Maya
   end-to-end check covers both scenarios (animation A → B, and mesh-only B:

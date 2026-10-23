@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from rigflow.core.character import Character, MeshSlot, RigSlot, AnimSlot
 from rigflow.animation.clip import AnimationClip, ClipStatus
 from rigflow.core.session import ModelInfo, RigInfo
+from rigflow.core.similarity import MeshSimilarity
 from rigflow.mapping.matcher import label_skeleton
 from rigflow.skeleton.model import JointInfo, Skeleton
 from rigflow.ui.controller import ControllerBase, action
@@ -75,6 +76,19 @@ class FakeController(ControllerBase):
             rig=None if mesh_only else RigSlot(skeleton.main_root(), skeleton, labels,
                                                labels.convention, list(labels.notes)),
             anim=AnimSlot((1.0, 120.0), 24.0, len(skeleton)) if animated or hero else None)
+
+    def mesh_similarity(self, a, b):
+        """Deterministic preview rules: twin/copy/same = 96%, statue/other = 41%,
+        otherwise 92%. 'head' marks Head as differing. Similarity stems are
+        independent of slot detection (.obj still means a mesh-only model).
+        """
+        key = (a.character_id, b.character_id)
+        if key not in self._similarity_cache:
+            stems = " ".join(Path(c.source_path or c.name).stem.lower() for c in (a, b))
+            score = (96.0 if any(w in stems for w in ("twin", "copy", "same")) else
+                     41.0 if any(w in stems for w in ("statue", "other")) else 92.0)
+            self._similarity_cache[key] = MeshSimilarity(score, score >= 80, ["Head"] if "head" in stems else [])
+        return self._similarity_cache[key]
 
     @action("Adding demo model…")
     def add_model_from_file(self, path):
@@ -159,8 +173,11 @@ class FakeController(ControllerBase):
         self._fit.skin_clusters = ["rigflow_skin1"]
         self._fit = None
         self._fit_destination_id = None
+        started_steps = self.session.started_steps
         self.session.character_updated(destination.character_id)
-        return self.start_plan() if self.session.plan.transfers_animation else {"step": "setup"}
+        result = self.start_plan() if self.session.plan.transfers_animation else {"step": "setup"}
+        self.session.started_steps = started_steps
+        return result
 
     def begin_selection(self, clip_id):
         super().clear_selected_pair(clip_id)
