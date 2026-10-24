@@ -81,6 +81,8 @@ rig transfer and returns to Setup.
 Choose **Model A** or **Model B** and define its joints on the **Body** or
 **Hands** map. The counters show the 15 required HumanIK roles per model;
 smaller slots (extra spines, shoulders, neck, toes and fingers) are optional.
+The A-pose figure uses two label columns with leaders to each joint; the Hands
+map follows an open-hand pose. Hover a joint to read labels hidden at small sizes.
 The compact toolbar keeps model selection, detection, presets and display mode
 in one row so the definition figure has the available space at smaller windows.
 The main Maya viewport isolates and frames that model with joint X-ray on.

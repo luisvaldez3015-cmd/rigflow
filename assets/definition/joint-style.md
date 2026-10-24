@@ -21,9 +21,11 @@ under `style`, so code can read them instead of copying them.
 ## Paint order
 
 1. Silhouette SVG.
-2. All bones (parent to child, list order of `bones`).
-3. All joints; draw the waiting joint last so its glow sits on top.
-4. Labels, then headings.
+2. Leader lines (Body map only, see Labels). They run to the joint centre and are
+   covered by the bones and spheres painted after them.
+3. All bones (parent to child, list order of `bones`).
+4. All joints; draw the waiting joint last so its glow sits on top.
+5. Labels, then headings.
 
 ## Joint radius
 
@@ -37,8 +39,8 @@ r_px = max(min_px, r * scale)
 with `min_px` = 6 (required) / 4.5 (optional) for the body and 6.5 / 5 for the
 hands (`style.jointMinRadiusPx`). Hit-test radius: `max(r_px + 4, 10)` px.
 
-Spacing: no two joint centres are closer than 3.7 x the larger radius in the
-body (Spine to Hips, Foot to Toe are the tightest) and 6 x in the hands.
+Spacing: no two joint centres are closer than 3.4 x the larger radius in the
+body (Head to Neck, then Spine to Hips) and 4.9 x in the hands (Pinky 2 to 3).
 
 ## Joint (the sphere)
 
@@ -113,16 +115,38 @@ incoming bone neutral and gets the attention from its glow instead.
 - Pixel sizes are fixed: labels do not scale with the figure.
 - Anchor: `x, y` in viewBox units; `y` is the vertical centre of the text line, `align` is
   `left`, `right` or `center` around `x`. Lay out in a rect of the font's full height centred on `y`.
-- `minScale`: hide the label while `scale < minScale` (the joint tooltip still names it).
-  These were measured with a collision check (glyph box + 2.5 px against the silhouette edge,
-  every bone, every joint and every other label) from scale 0.45 to 1.40, so a visible label never
-  touches anything. At the 1110 x 600 map every label shows; at 910 x 330 the optional
-  Neck, Shoulder and Spine 1-3 labels hide.
-- `compact`: when present and `scale < compact.below`, use `compact.x/y/align` instead.
-  Only Spine and Hips have one: below 0.7 the torso is too narrow for 11 px text, so their
-  labels move just outside the waist on the screen-right side.
-- Hands labels are keyed `{Side}Hand{Finger}` (finger name above the fingertip) and
-  `{Side}Hand` ("Wrist", inside the forearm under the wrist joint).
+- `minScale`: hide the label (and its leader) while `scale < minScale`; the joint tooltip still
+  names it. Measured with a collision check (glyph box + 2.5 px against the silhouette edge,
+  every bone, every joint, every leader and every other label) from scale 0.45 to 1.40, so a
+  visible label never touches anything. At 1110 x 600 every label shows; at 910 x 330
+  (scale 0.52) every required label still shows and only the optional Neck and the
+  character's left Shoulder hide.
+- `compact` (optional, not used by this art): when present and `scale < compact.below`, use
+  `compact.x/y/align` instead.
+
+### Body map: label columns and leader lines
+
+The A-pose figure is narrow, so the Body labels sit in two columns beside it, HumanIK style,
+and every label has a `leader`: a polyline in viewBox units `[[x, y], ...]` from the end next to
+the text to the joint centre.
+
+- Screen-left column (the character's RIGHT side): text right-aligned at x=266.
+  Screen-right column (the character's LEFT side and the centre chain Head, Neck, Spine 3..1,
+  Spine, Hips): text left-aligned at x=734. Headings "RIGHT"/"LEFT" sit on top of the columns.
+- Each leader is `[text end, bend, joint centre]`: a short flat run from 6 units off the text
+  to the bend at x=296 / x=704, then straight to the joint. Rows were chosen so that leaders never
+  cross each other, stay at least 17 units from every other required joint (13 from optional
+  ones) and cross bones at 30 degrees or more. Required labels are at least 31 units apart, so
+  they still fit at the minimum map size.
+- Draw: `QPen(label colour, 1.0 px)` with round caps and joins, alpha 38 %; 90 % while the joint
+  is `waiting` or hovered (`style.leader`: `widthPx`, `opacity`, `hotOpacity`). Use the label's
+  current colour, so a required-empty leader is muted red and the waiting one is cyan. Paint the
+  leaders before the bones (see Paint order): the line ends under the sphere, so there is no
+  gap to compute and the hover/waiting rings stay clean.
+- Skip a leader whenever its label is hidden by `minScale`.
+- Hands labels have no leader: `{Side}Hand{Finger}` sits above the fingertip on the finger's
+  axis (Thumb above the thumb tip) and `{Side}Hand` ("Wrist") inside the forearm under the
+  wrist joint.
 - Headings ("RIGHT"/"LEFT", "RIGHT HAND"/"LEFT HAND"): 10 px, weight 600, letter spacing
   1.6 px, `#8a8a8a`, always shown.
 
@@ -130,7 +154,16 @@ incoming bone neutral and gets the attention from its glow instead.
 
 - Fill: vertical gradient `#3c4347` to `#33393c`; rim `#5c686e` 1.6 units; under it a 6-unit
   halo stroke `#1d2123` at 55 % that separates the figure from the `#2f2f2f` card.
-- Body: neutral athletic mannequin in T-pose, about 7.6 heads (crown y=16, floor y=630),
-  with a soft ground shadow and a few quiet anatomy lines (pectorals, inguinal lines) in `#465055`.
-- Hands: forearm stubs fade out at the bottom edge so the hands float without a hard cut.
+- Body: athletic male figure in A-pose (arms about 25 degrees out, palms forward, fingers and
+  thumb visible), about 8 heads (crown y=12, soles y=631), with a soft ground shadow and a few
+  quiet anatomy lines (pectorals, front deltoid border, inguinal lines, kneecaps) in `#465055`.
+- Joints sit on the anatomy of that pose: Arm in the shoulder joint under the deltoid, ForeArm
+  at the elbow, Hand at the wrist, UpLeg at the hip socket, Leg at the knee, Foot at the ankle,
+  ToeBase at the ball of the foot, Hips to Spine 3 evenly up the torso, Neck at the base of the
+  neck, Head at the base of the skull, Shoulder at the sternal end of the clavicle.
+- Hands: open hands, palms towards the viewer, fingers spread with natural lengths (middle
+  longest, pinky shortest), thumb set low on a full thenar and angled to the centre; joint 1 of
+  each finger is the knuckle inside the palm, 2 and 3 the finger joints; the thumb's 1 is the
+  CMC joint at the base of the thenar. The forearm stubs fade out at the bottom edge so the
+  hands float without a hard cut.
 - No text and no joints inside the SVGs.

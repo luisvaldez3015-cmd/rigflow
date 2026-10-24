@@ -85,7 +85,7 @@ def _grab(window, name):
             painter.end()
     REPORT["capture_method"] = "Qt widget grab with live Maya viewport playblasts in their Qt rectangles"
     pixmap.save(path, "PNG")
-    _log("screenshot", file=path)
+    _log("screenshot", file=path, size=[pixmap.width(), pixmap.height()])
     return path
 
 
@@ -261,6 +261,19 @@ def run():
     view.map_tabs.setCurrentIndex(0)
     REPORT["checks"]["manual_match"] = bool(clip.mapping.matches["LeftHand"].manual)
     _grab(window, "04_matching")
+    normal_size = window.size()
+    # Maya owns the floating workspace's layout and overrides child resize().
+    # Resize its host by the content delta to exercise the real minimum size.
+    host = window.window()
+    host.resize(host.width() + 960 - window.width(), host.height() + 640 - window.height())
+    _pump(.3)
+    REPORT["checks"]["match_minimum_size"] = (window.width(), window.height()) == (960, 640)
+    _grab(window, "04_matching_min")
+    view.map_tabs.setCurrentIndex(1)
+    _grab(window, "04_match_hands_min")
+    view.map_tabs.setCurrentIndex(0)
+    host.resize(host.width() + normal_size.width() - window.width(),
+                host.height() + normal_size.height() - window.height())
     _viewport_diagnostics(window, "matching")
     window.show_setup()
     REPORT["checks"]["back_restores_main_viewport"] = restored_to(baseline)
@@ -436,7 +449,7 @@ def run():
         "animation_waits_for_rig", "started_rig_steps_preserved",
         "match_main_isolated", "match_joint_xray", "match_no_embedded_panels", "slot_first_waits",
         "wrong_model_rejected", "slot_first_assigned", "switch_isolates_b", "joint_first_assigned",
-        "assigned_slot_selects_scene", "display_bones", "display_mesh", "display_both",
+        "assigned_slot_selects_scene", "display_bones", "display_mesh", "display_both", "match_minimum_size",
         "back_restores_main_viewport", "transfer_restores_main_viewport", "close_restores_main_viewport",
         "close_releases_definition",
         "disabled_isolate_restored",

@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Match art uses an athletic A-pose figure, leader-line labels and hands based
+  on an open-hand pose.
 - HumanIK-style Match page with Body / Hands definition maps, per-model required
   progress, slot-first and joint-first assignment, manual-preserving Auto-detect
   and presets. Removed Details, joint trees and embedded Match viewports.

@@ -87,146 +87,151 @@
    "headingWeight": 600,
    "headingLetterSpacingPx": 1.6,
    "heading": "#8a8a8a"
+  },
+  "leader": {
+   "widthPx": 1.0,
+   "opacity": 0.38,
+   "hotOpacity": 0.9
   }
  },
  "body": {
   "svg": "body.svg",
   "joints": {
    "Head": {
-    "x": 500,
-    "y": 74,
+    "x": 500.0,
+    "y": 66.8,
     "r": 10,
     "required": true
    },
    "Neck": {
-    "x": 500,
-    "y": 118,
+    "x": 500.0,
+    "y": 100.5,
     "r": 7,
     "required": false
    },
    "Spine3": {
-    "x": 500,
-    "y": 154,
+    "x": 500.0,
+    "y": 138.5,
     "r": 7,
     "required": false
    },
    "Spine2": {
-    "x": 500,
-    "y": 190,
+    "x": 500.0,
+    "y": 175.4,
     "r": 7,
     "required": false
    },
    "Spine1": {
-    "x": 500,
-    "y": 227,
+    "x": 500.0,
+    "y": 212.3,
     "r": 7,
     "required": false
    },
    "Spine": {
-    "x": 500,
-    "y": 263,
+    "x": 500.0,
+    "y": 249.2,
     "r": 10,
     "required": true
    },
    "Hips": {
-    "x": 500,
-    "y": 299,
+    "x": 500.0,
+    "y": 286.0,
     "r": 10,
     "required": true
    },
    "LeftShoulder": {
-    "x": 541.0,
-    "y": 136,
+    "x": 522.1,
+    "y": 120.6,
     "r": 7,
     "required": false
    },
    "LeftArm": {
-    "x": 584.0,
-    "y": 140,
+    "x": 570.1,
+    "y": 146.9,
     "r": 10,
     "required": true
    },
    "LeftForeArm": {
-    "x": 697.0,
-    "y": 142,
+    "x": 608.4,
+    "y": 240.7,
     "r": 10,
     "required": true
    },
    "LeftHand": {
-    "x": 791.0,
-    "y": 143,
+    "x": 639.2,
+    "y": 291.3,
     "r": 10,
     "required": true
    },
    "LeftUpLeg": {
-    "x": 545.0,
-    "y": 316,
+    "x": 529.5,
+    "y": 311.3,
     "r": 10,
     "required": true
    },
    "LeftLeg": {
-    "x": 549.0,
-    "y": 452,
+    "x": 541.1,
+    "y": 463.1,
     "r": 10,
     "required": true
    },
    "LeftFoot": {
-    "x": 553.0,
-    "y": 576,
+    "x": 546.2,
+    "y": 575.9,
     "r": 10,
     "required": true
    },
    "LeftToeBase": {
-    "x": 562.0,
-    "y": 612,
+    "x": 561.1,
+    "y": 614.4,
     "r": 7,
     "required": false
    },
    "RightShoulder": {
-    "x": 459.0,
-    "y": 136,
+    "x": 477.9,
+    "y": 120.6,
     "r": 7,
     "required": false
    },
    "RightArm": {
-    "x": 416.0,
-    "y": 140,
+    "x": 429.9,
+    "y": 146.9,
     "r": 10,
     "required": true
    },
    "RightForeArm": {
-    "x": 303.0,
-    "y": 142,
+    "x": 391.6,
+    "y": 240.7,
     "r": 10,
     "required": true
    },
    "RightHand": {
-    "x": 209.0,
-    "y": 143,
+    "x": 360.8,
+    "y": 291.3,
     "r": 10,
     "required": true
    },
    "RightUpLeg": {
-    "x": 455.0,
-    "y": 316,
+    "x": 470.5,
+    "y": 311.3,
     "r": 10,
     "required": true
    },
    "RightLeg": {
-    "x": 451.0,
-    "y": 452,
+    "x": 458.9,
+    "y": 463.1,
     "r": 10,
     "required": true
    },
    "RightFoot": {
-    "x": 447.0,
-    "y": 576,
+    "x": 453.8,
+    "y": 575.9,
     "r": 10,
     "required": true
    },
    "RightToeBase": {
-    "x": 438.0,
-    "y": 612,
+    "x": 438.9,
+    "y": 614.4,
     "r": 7,
     "required": false
    }
@@ -324,190 +329,500 @@
   "labels": {
    "Head": {
     "text": "Head",
-    "x": 541,
-    "y": 50,
+    "x": 734.0,
+    "y": 52,
     "align": "left",
-    "minScale": 0
+    "minScale": 0.48,
+    "leader": [
+     [
+      728.0,
+      52
+     ],
+     [
+      704.0,
+      52
+     ],
+     [
+      500.0,
+      66.8
+     ]
+    ]
    },
    "Neck": {
     "text": "Neck",
-    "x": 513,
-    "y": 119,
+    "x": 734.0,
+    "y": 70,
     "align": "left",
-    "minScale": 0.9
+    "minScale": 0.7,
+    "leader": [
+     [
+      728.0,
+      70
+     ],
+     [
+      704.0,
+      70
+     ],
+     [
+      500.0,
+      100.5
+     ]
+    ]
    },
    "Spine3": {
     "text": "Spine 3",
-    "x": 520,
-    "y": 161,
+    "x": 734.0,
+    "y": 106,
     "align": "left",
-    "minScale": 0.61
+    "minScale": 0,
+    "leader": [
+     [
+      728.0,
+      106
+     ],
+     [
+      704.0,
+      106
+     ],
+     [
+      500.0,
+      138.5
+     ]
+    ]
    },
    "Spine2": {
     "text": "Spine 2",
-    "x": 520,
-    "y": 190,
+    "x": 734.0,
+    "y": 175,
     "align": "left",
-    "minScale": 0.61
+    "minScale": 0,
+    "leader": [
+     [
+      728.0,
+      175
+     ],
+     [
+      704.0,
+      175
+     ],
+     [
+      500.0,
+      175.4
+     ]
+    ]
    },
    "Spine1": {
     "text": "Spine 1",
-    "x": 520,
-    "y": 227,
+    "x": 734.0,
+    "y": 207,
     "align": "left",
-    "minScale": 0.71
+    "minScale": 0.49,
+    "leader": [
+     [
+      728.0,
+      207
+     ],
+     [
+      704.0,
+      207
+     ],
+     [
+      500.0,
+      212.3
+     ]
+    ]
    },
    "Spine": {
     "text": "Spine",
-    "x": 522,
-    "y": 263,
+    "x": 734.0,
+    "y": 268,
     "align": "left",
     "minScale": 0,
-    "compact": {
-     "x": 578,
-     "y": 251,
-     "align": "left",
-     "below": 0.7
-    }
+    "leader": [
+     [
+      728.0,
+      268
+     ],
+     [
+      704.0,
+      268
+     ],
+     [
+      500.0,
+      249.2
+     ]
+    ]
    },
    "Hips": {
     "text": "Hips",
-    "x": 522,
-    "y": 285,
+    "x": 734.0,
+    "y": 330,
     "align": "left",
-    "minScale": 0.47,
-    "compact": {
-     "x": 585,
-     "y": 283,
-     "align": "left",
-     "below": 0.7
-    }
+    "minScale": 0,
+    "leader": [
+     [
+      728.0,
+      330
+     ],
+     [
+      704.0,
+      330
+     ],
+     [
+      500.0,
+      286.0
+     ]
+    ]
    },
    "LeftShoulder": {
     "text": "Shoulder",
-    "x": 529,
-    "y": 99.5,
+    "x": 734.0,
+    "y": 88,
     "align": "left",
-    "minScale": 0.77
-   },
-   "RightShoulder": {
-    "text": "Shoulder",
-    "x": 471.0,
-    "y": 99.5,
-    "align": "right",
-    "minScale": 0.77
+    "minScale": 0.67,
+    "leader": [
+     [
+      728.0,
+      88
+     ],
+     [
+      704.0,
+      88
+     ],
+     [
+      522.1,
+      120.6
+     ]
+    ]
    },
    "LeftArm": {
     "text": "Arm",
-    "x": 600,
-    "y": 104,
-    "align": "center",
-    "minScale": 0.46
-   },
-   "RightArm": {
-    "text": "Arm",
-    "x": 400.0,
-    "y": 104,
-    "align": "center",
-    "minScale": 0
+    "x": 734.0,
+    "y": 146,
+    "align": "left",
+    "minScale": 0,
+    "leader": [
+     [
+      728.0,
+      146
+     ],
+     [
+      704.0,
+      146
+     ],
+     [
+      570.1,
+      146.9
+     ]
+    ]
    },
    "LeftForeArm": {
     "text": "Forearm",
-    "x": 697,
-    "y": 109,
-    "align": "center",
-    "minScale": 0.47
-   },
-   "RightForeArm": {
-    "text": "Forearm",
-    "x": 303.0,
-    "y": 109,
-    "align": "center",
-    "minScale": 0.47
+    "x": 734.0,
+    "y": 237,
+    "align": "left",
+    "minScale": 0,
+    "leader": [
+     [
+      728.0,
+      237
+     ],
+     [
+      704.0,
+      237
+     ],
+     [
+      608.4,
+      240.7
+     ]
+    ]
    },
    "LeftHand": {
     "text": "Hand",
-    "x": 800,
-    "y": 110,
-    "align": "center",
-    "minScale": 0.47
-   },
-   "RightHand": {
-    "text": "Hand",
-    "x": 200.0,
-    "y": 110,
-    "align": "center",
-    "minScale": 0.47
+    "x": 734.0,
+    "y": 299,
+    "align": "left",
+    "minScale": 0.49,
+    "leader": [
+     [
+      728.0,
+      299
+     ],
+     [
+      704.0,
+      299
+     ],
+     [
+      639.2,
+      291.3
+     ]
+    ]
    },
    "LeftUpLeg": {
     "text": "Up Leg",
-    "x": 594,
-    "y": 316,
+    "x": 734.0,
+    "y": 361,
     "align": "left",
-    "minScale": 0
-   },
-   "RightUpLeg": {
-    "text": "Up Leg",
-    "x": 406.0,
-    "y": 316,
-    "align": "right",
-    "minScale": 0
+    "minScale": 0.49,
+    "leader": [
+     [
+      728.0,
+      361
+     ],
+     [
+      704.0,
+      361
+     ],
+     [
+      529.5,
+      311.3
+     ]
+    ]
    },
    "LeftLeg": {
     "text": "Leg",
-    "x": 584,
-    "y": 452,
+    "x": 734.0,
+    "y": 463,
     "align": "left",
-    "minScale": 0
-   },
-   "RightLeg": {
-    "text": "Leg",
-    "x": 416.0,
-    "y": 452,
-    "align": "right",
-    "minScale": 0
+    "minScale": 0,
+    "leader": [
+     [
+      728.0,
+      463
+     ],
+     [
+      704.0,
+      463
+     ],
+     [
+      541.1,
+      463.1
+     ]
+    ]
    },
    "LeftFoot": {
     "text": "Foot",
-    "x": 582,
-    "y": 576,
+    "x": 734.0,
+    "y": 582,
     "align": "left",
-    "minScale": 0
-   },
-   "RightFoot": {
-    "text": "Foot",
-    "x": 418.0,
-    "y": 576,
-    "align": "right",
-    "minScale": 0
+    "minScale": 0,
+    "leader": [
+     [
+      728.0,
+      582
+     ],
+     [
+      704.0,
+      582
+     ],
+     [
+      546.2,
+      575.9
+     ]
+    ]
    },
    "LeftToeBase": {
     "text": "Toe",
-    "x": 594,
-    "y": 612,
+    "x": 734.0,
+    "y": 614,
     "align": "left",
-    "minScale": 0
+    "minScale": 0,
+    "leader": [
+     [
+      728.0,
+      614
+     ],
+     [
+      704.0,
+      614
+     ],
+     [
+      561.1,
+      614.4
+     ]
+    ]
+   },
+   "RightShoulder": {
+    "text": "Shoulder",
+    "x": 266.0,
+    "y": 88,
+    "align": "right",
+    "minScale": 0,
+    "leader": [
+     [
+      272.0,
+      88
+     ],
+     [
+      296.0,
+      88
+     ],
+     [
+      477.9,
+      120.6
+     ]
+    ]
+   },
+   "RightArm": {
+    "text": "Arm",
+    "x": 266.0,
+    "y": 146,
+    "align": "right",
+    "minScale": 0,
+    "leader": [
+     [
+      272.0,
+      146
+     ],
+     [
+      296.0,
+      146
+     ],
+     [
+      429.9,
+      146.9
+     ]
+    ]
+   },
+   "RightForeArm": {
+    "text": "Forearm",
+    "x": 266.0,
+    "y": 237,
+    "align": "right",
+    "minScale": 0,
+    "leader": [
+     [
+      272.0,
+      237
+     ],
+     [
+      296.0,
+      237
+     ],
+     [
+      391.6,
+      240.7
+     ]
+    ]
+   },
+   "RightHand": {
+    "text": "Hand",
+    "x": 266.0,
+    "y": 299,
+    "align": "right",
+    "minScale": 0,
+    "leader": [
+     [
+      272.0,
+      299
+     ],
+     [
+      296.0,
+      299
+     ],
+     [
+      360.8,
+      291.3
+     ]
+    ]
+   },
+   "RightUpLeg": {
+    "text": "Up Leg",
+    "x": 266.0,
+    "y": 361,
+    "align": "right",
+    "minScale": 0,
+    "leader": [
+     [
+      272.0,
+      361
+     ],
+     [
+      296.0,
+      361
+     ],
+     [
+      470.5,
+      311.3
+     ]
+    ]
+   },
+   "RightLeg": {
+    "text": "Leg",
+    "x": 266.0,
+    "y": 463,
+    "align": "right",
+    "minScale": 0,
+    "leader": [
+     [
+      272.0,
+      463
+     ],
+     [
+      296.0,
+      463
+     ],
+     [
+      458.9,
+      463.1
+     ]
+    ]
+   },
+   "RightFoot": {
+    "text": "Foot",
+    "x": 266.0,
+    "y": 582,
+    "align": "right",
+    "minScale": 0,
+    "leader": [
+     [
+      272.0,
+      582
+     ],
+     [
+      296.0,
+      582
+     ],
+     [
+      453.8,
+      575.9
+     ]
+    ]
    },
    "RightToeBase": {
     "text": "Toe",
-    "x": 406.0,
-    "y": 612,
+    "x": 266.0,
+    "y": 614,
     "align": "right",
-    "minScale": 0
+    "minScale": 0,
+    "leader": [
+     [
+      272.0,
+      614
+     ],
+     [
+      296.0,
+      614
+     ],
+     [
+      438.9,
+      614.4
+     ]
+    ]
    }
   },
   "headings": [
    {
     "text": "RIGHT",
-    "x": 210,
-    "y": 52,
-    "align": "center"
+    "x": 266.0,
+    "y": 18,
+    "align": "right"
    },
    {
     "text": "LEFT",
-    "x": 790,
-    "y": 52,
-    "align": "center"
+    "x": 734.0,
+    "y": 18,
+    "align": "left"
    }
   ]
  },
@@ -515,194 +830,194 @@
   "svg": "hands.svg",
   "joints": {
    "LeftHand": {
-    "x": 736.0,
-    "y": 570,
+    "x": 774.0,
+    "y": 452.4,
     "r": 12,
     "required": true
    },
    "LeftHandIndex1": {
-    "x": 661.0,
-    "y": 350,
+    "x": 705.6,
+    "y": 279.5,
     "r": 8.5,
     "required": false
    },
    "LeftHandIndex2": {
-    "x": 649.9,
-    "y": 244.6,
+    "x": 700.5,
+    "y": 192.2,
     "r": 8.5,
     "required": false
    },
    "LeftHandIndex3": {
-    "x": 642.9,
-    "y": 177.9,
+    "x": 697.2,
+    "y": 136.7,
     "r": 8.5,
     "required": false
    },
    "LeftHandMiddle1": {
-    "x": 719.0,
-    "y": 338,
+    "x": 767.0,
+    "y": 270.2,
     "r": 8.5,
     "required": false
    },
    "LeftHandMiddle2": {
-    "x": 718.0,
-    "y": 221.0,
+    "x": 776.2,
+    "y": 179.9,
     "r": 8.5,
     "required": false
    },
    "LeftHandMiddle3": {
-    "x": 717.3,
-    "y": 147.0,
+    "x": 782.1,
+    "y": 122.4,
     "r": 8.5,
     "required": false
    },
    "LeftHandRing1": {
-    "x": 775.0,
-    "y": 346,
+    "x": 821.6,
+    "y": 286.5,
     "r": 8.5,
     "required": false
    },
    "LeftHandRing2": {
-    "x": 785.4,
-    "y": 237.5,
+    "x": 836.9,
+    "y": 206.3,
     "r": 8.5,
     "required": false
    },
    "LeftHandRing3": {
-    "x": 792.0,
-    "y": 169.8,
+    "x": 846.6,
+    "y": 155.4,
     "r": 8.5,
     "required": false
    },
    "LeftHandPinky1": {
-    "x": 826.0,
-    "y": 370,
+    "x": 859.8,
+    "y": 316.6,
     "r": 8.5,
     "required": false
    },
    "LeftHandPinky2": {
-    "x": 845.3,
-    "y": 286.2,
+    "x": 887.9,
+    "y": 257.4,
     "r": 8.5,
     "required": false
    },
    "LeftHandPinky3": {
-    "x": 857.0,
-    "y": 235.5,
+    "x": 905.8,
+    "y": 219.8,
     "r": 8.5,
     "required": false
    },
    "LeftHandThumb1": {
-    "x": 676.0,
-    "y": 514,
+    "x": 719.5,
+    "y": 404.8,
     "r": 8.5,
     "required": false
    },
    "LeftHandThumb2": {
-    "x": 624.0,
-    "y": 448,
+    "x": 659.2,
+    "y": 350.3,
     "r": 8.5,
     "required": false
    },
    "LeftHandThumb3": {
-    "x": 587.0,
-    "y": 395,
+    "x": 608.1,
+    "y": 306.2,
     "r": 8.5,
     "required": false
    },
    "RightHand": {
-    "x": 264.0,
-    "y": 570,
+    "x": 226.0,
+    "y": 452.4,
     "r": 12,
     "required": true
    },
    "RightHandIndex1": {
-    "x": 339.0,
-    "y": 350,
+    "x": 294.4,
+    "y": 279.5,
     "r": 8.5,
     "required": false
    },
    "RightHandIndex2": {
-    "x": 350.1,
-    "y": 244.6,
+    "x": 299.5,
+    "y": 192.2,
     "r": 8.5,
     "required": false
    },
    "RightHandIndex3": {
-    "x": 357.1,
-    "y": 177.9,
+    "x": 302.8,
+    "y": 136.7,
     "r": 8.5,
     "required": false
    },
    "RightHandMiddle1": {
-    "x": 281.0,
-    "y": 338,
+    "x": 233.0,
+    "y": 270.2,
     "r": 8.5,
     "required": false
    },
    "RightHandMiddle2": {
-    "x": 282.0,
-    "y": 221.0,
+    "x": 223.8,
+    "y": 179.9,
     "r": 8.5,
     "required": false
    },
    "RightHandMiddle3": {
-    "x": 282.7,
-    "y": 147.0,
+    "x": 217.9,
+    "y": 122.4,
     "r": 8.5,
     "required": false
    },
    "RightHandRing1": {
-    "x": 225.0,
-    "y": 346,
+    "x": 178.4,
+    "y": 286.5,
     "r": 8.5,
     "required": false
    },
    "RightHandRing2": {
-    "x": 214.6,
-    "y": 237.5,
+    "x": 163.1,
+    "y": 206.3,
     "r": 8.5,
     "required": false
    },
    "RightHandRing3": {
-    "x": 208.0,
-    "y": 169.8,
+    "x": 153.4,
+    "y": 155.4,
     "r": 8.5,
     "required": false
    },
    "RightHandPinky1": {
-    "x": 174.0,
-    "y": 370,
+    "x": 140.2,
+    "y": 316.6,
     "r": 8.5,
     "required": false
    },
    "RightHandPinky2": {
-    "x": 154.7,
-    "y": 286.2,
+    "x": 112.1,
+    "y": 257.4,
     "r": 8.5,
     "required": false
    },
    "RightHandPinky3": {
-    "x": 143.0,
-    "y": 235.5,
+    "x": 94.2,
+    "y": 219.8,
     "r": 8.5,
     "required": false
    },
    "RightHandThumb1": {
-    "x": 324.0,
-    "y": 514,
+    "x": 280.5,
+    "y": 404.8,
     "r": 8.5,
     "required": false
    },
    "RightHandThumb2": {
-    "x": 376.0,
-    "y": 448,
+    "x": 340.8,
+    "y": 350.3,
     "r": 8.5,
     "required": false
    },
    "RightHandThumb3": {
-    "x": 413.0,
-    "y": 395,
+    "x": 391.9,
+    "y": 306.2,
     "r": 8.5,
     "required": false
    }
@@ -832,85 +1147,85 @@
   "labels": {
    "LeftHandThumb": {
     "text": "Thumb",
-    "x": 564.4,
-    "y": 322.3,
+    "x": 557.9,
+    "y": 244.2,
     "align": "center",
     "minScale": 0
    },
    "LeftHandIndex": {
     "text": "Index",
-    "x": 635.1,
-    "y": 103.4,
+    "x": 692.7,
+    "y": 59.2,
     "align": "center",
     "minScale": 0
    },
    "LeftHandMiddle": {
     "text": "Middle",
-    "x": 716.6,
-    "y": 67.0,
+    "x": 790.1,
+    "y": 43.0,
     "align": "center",
-    "minScale": 0
+    "minScale": 0.49
    },
    "LeftHandRing": {
     "text": "Ring",
-    "x": 799.3,
-    "y": 93.2,
+    "x": 860.5,
+    "y": 82.8,
     "align": "center",
     "minScale": 0
    },
    "LeftHandPinky": {
     "text": "Pinky",
-    "x": 872.1,
-    "y": 170.3,
+    "x": 933.1,
+    "y": 162.2,
     "align": "center",
-    "minScale": 0
+    "minScale": 0.49
    },
    "LeftHand": {
     "text": "Wrist",
-    "x": 736.0,
-    "y": 604,
+    "x": 774.0,
+    "y": 488.4,
     "align": "center",
     "minScale": 0
    },
    "RightHandThumb": {
     "text": "Thumb",
-    "x": 435.6,
-    "y": 322.3,
+    "x": 442.1,
+    "y": 244.2,
     "align": "center",
     "minScale": 0
    },
    "RightHandIndex": {
     "text": "Index",
-    "x": 364.9,
-    "y": 103.4,
+    "x": 307.3,
+    "y": 59.2,
     "align": "center",
     "minScale": 0
    },
    "RightHandMiddle": {
     "text": "Middle",
-    "x": 283.4,
-    "y": 67.0,
+    "x": 209.9,
+    "y": 43.0,
     "align": "center",
-    "minScale": 0
+    "minScale": 0.47
    },
    "RightHandRing": {
     "text": "Ring",
-    "x": 200.7,
-    "y": 93.2,
+    "x": 139.5,
+    "y": 82.8,
     "align": "center",
     "minScale": 0
    },
    "RightHandPinky": {
     "text": "Pinky",
-    "x": 127.9,
-    "y": 170.3,
+    "x": 66.9,
+    "y": 162.2,
     "align": "center",
-    "minScale": 0
+    "minScale": 0.49
    },
    "RightHand": {
     "text": "Wrist",
-    "x": 264.0,
-    "y": 604,
+    "x": 226.0,
+    "y": 488.4,
     "align": "center",
     "minScale": 0
    }
@@ -918,14 +1233,14 @@
   "headings": [
    {
     "text": "RIGHT HAND",
-    "x": 40,
-    "y": 36,
+    "x": 14,
+    "y": 20,
     "align": "left"
    },
    {
     "text": "LEFT HAND",
-    "x": 960,
-    "y": 36,
+    "x": 986,
+    "y": 20,
     "align": "right"
    }
   ]

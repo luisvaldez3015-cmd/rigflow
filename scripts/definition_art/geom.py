@@ -1,6 +1,9 @@
-"""RigFlow character-definition art: silhouettes, joints, bones and labels.
+"""RigFlow character-definition art, second pass: A-pose body and open hands.
 
 Everything is in SVG viewBox units (1000 x 640). Run gen.py to write the assets.
+The contours are drawn as Catmull-Rom control points in "design units" (a
+400 x 600 drawing board for the body, another for the left hand) and mapped
+into the viewBox by B() and Hd().
 """
 import math
 
@@ -14,29 +17,34 @@ def mirror_x(p):
 
 # --------------------------------------------------------------------------- splines
 
-def catmull_path(points, closed=True, tension=1.0):
-    """Closed Catmull-Rom spline through points -> SVG path data.
-
-    A point (x, y, 'c') is a corner: its tangent collapses so the curve meets it
-    at an angle (crotch, armpit, finger webs).
-    """
+def _bezier_segments(points, closed=True, tension=1.0):
     n = len(points)
     pts = [(float(p[0]), float(p[1])) for p in points]
     corner = [len(p) > 2 and p[2] == 'c' for p in points]
 
     def tangent(i):
-        if corner[i % n]:
+        if corner[i % n] or (not closed and i in (0, n - 1)):
             return (0.0, 0.0)
         a, b = pts[(i - 1) % n], pts[(i + 1) % n]
         return ((b[0] - a[0]) * tension / 6.0, (b[1] - a[1]) * tension / 6.0)
 
-    d = ["M%.2f,%.2f" % pts[0]]
-    segs = n if closed else n - 1
-    for i in range(segs):
+    segs = []
+    for i in range(n if closed else n - 1):
         p1, p2 = pts[i % n], pts[(i + 1) % n]
         t1, t2 = tangent(i), tangent(i + 1)
-        c1 = (p1[0] + t1[0], p1[1] + t1[1])
-        c2 = (p2[0] - t2[0], p2[1] - t2[1])
+        segs.append((p1, (p1[0] + t1[0], p1[1] + t1[1]), (p2[0] - t2[0], p2[1] - t2[1]), p2))
+    return segs
+
+
+def catmull_path(points, closed=True, tension=1.0):
+    """Catmull-Rom spline through points -> SVG path data.
+
+    A point (x, y, 'c') is a corner: its tangent collapses so the curve meets it
+    at an angle (crotch, armpit, finger webs).
+    """
+    segs = _bezier_segments(points, closed, tension)
+    d = ["M%.2f,%.2f" % segs[0][0]]
+    for _, c1, c2, p2 in segs:
         d.append("C%.2f,%.2f %.2f,%.2f %.2f,%.2f" % (c1 + c2 + p2))
     if closed:
         d.append("Z")
@@ -45,22 +53,8 @@ def catmull_path(points, closed=True, tension=1.0):
 
 def sample_catmull(points, closed=True, tension=1.0, steps=12):
     """Polyline sampling of the same spline (for collision tests)."""
-    n = len(points)
-    pts = [(float(p[0]), float(p[1])) for p in points]
-    corner = [len(p) > 2 and p[2] == 'c' for p in points]
-
-    def tangent(i):
-        if corner[i % n]:
-            return (0.0, 0.0)
-        a, b = pts[(i - 1) % n], pts[(i + 1) % n]
-        return ((b[0] - a[0]) * tension / 6.0, (b[1] - a[1]) * tension / 6.0)
-
     out = []
-    for i in range(n if closed else n - 1):
-        p1, p2 = pts[i % n], pts[(i + 1) % n]
-        t1, t2 = tangent(i), tangent(i + 1)
-        c1 = (p1[0] + t1[0], p1[1] + t1[1])
-        c2 = (p2[0] - t2[0], p2[1] - t2[1])
+    for p1, c1, c2, p2 in _bezier_segments(points, closed, tension):
         for s in range(steps):
             t = s / float(steps)
             mt = 1 - t
@@ -72,35 +66,73 @@ def sample_catmull(points, closed=True, tension=1.0, steps=12):
 
 # --------------------------------------------------------------------------- body
 
-# Screen-right half of the mannequin (the character's LEFT side), clockwise from
-# the crown to the crotch. Head height 80 units; floor at y=630 -> ~7.6 heads.
-BODY_HALF = [
-    (500, 16),
-    (516, 18), (527, 25.5), (531.5, 38), (532.5, 50),                       # cranium
-    (535, 55.5), (536, 62.5), (533, 70, 'c'),                               # ear
-    (528, 77.5), (522, 87.5), (518.5, 93.5, 'c'),                           # jaw -> under the jaw
-    (519.5, 100.5), (523, 106.5),                                           # neck side
-    (531, 109.5), (547, 112.5), (565, 117.5), (580, 120.5),                 # trapezius
-    (593, 121), (606, 122.8), (618, 124.5),                                 # deltoid cap
-    (648, 125.2), (680, 126.5), (698, 128.5),                               # upper arm (top)
-    (717, 128), (745, 129.5), (772, 132), (787, 133.5),                     # forearm -> wrist
-    (802, 132.2), (824, 131.6), (846, 133.6), (861, 136.6),                 # back of the hand
-    (870, 141), (871, 145.2), (866.5, 148.6), (851, 150.2), (838, 150.6),   # finger tips
-    (832, 151.4, 'c'), (827, 155.6), (815, 158.2), (802, 157.4),            # thumb
-    (792, 153.8), (786, 152),                                               # wrist (under)
-    (770, 154.8), (743, 158), (716, 158.6), (698, 156.4),                   # forearm (under)
-    (676, 158), (646, 160), (618, 161.6), (598, 163), (586, 165, 'c'),      # upper arm (under) -> armpit
-    (581, 176), (578.5, 195), (574, 215), (568.5, 234),                     # lat -> waist
-    (566, 250), (567.5, 266), (572.5, 285), (577.5, 305),                   # iliac crest -> hip
-    (580, 326), (579, 352), (574.5, 384), (569, 418),                       # outer thigh
-    (566, 441), (567.5, 459), (572.5, 482), (574.5, 506),                   # knee -> calf
-    (571, 532), (565.5, 556), (563.5, 574),                                 # shin -> ankle
-    (568, 586), (575, 600), (580.5, 613), (578.5, 624), (568, 629.5),       # foot (outer) -> toes
-    (552, 630.5), (541, 627.5), (538, 616), (539.5, 601),                   # foot (inner)
-    (542, 586), (541, 571),                                                 # inner ankle
-    (536.5, 548), (530.5, 514), (529, 484), (531.5, 458),                   # calf (inner) -> knee
-    (530, 436), (525, 404), (517, 372), (509, 349), (500, 338, 'c'),        # inner thigh -> crotch
+# Body drawing board: centre line x=200, crown y=8, soles y=595 (about 8 heads,
+# athletic proportions). Mapped so the figure spans y 12..632 of the viewBox.
+BK = 1.054
+BOX, BOY = CX - 200 * BK, 12 - 8 * BK
+
+
+def B(x, y, *rest):
+    return (BOX + x * BK, BOY + y * BK) + tuple(rest)
+
+
+# Screen-right half of the figure (the character's LEFT side), clockwise from the
+# crown to the crotch, in body design units. A-pose: arms ~25 degrees out, palms
+# forward, thumbs pointing away from the body.
+BODY_HALF_D = [
+    (200, 8),
+    (210.5, 9.5), (218.5, 15), (223.5, 24), (225.5, 35), (225, 45),                 # cranium
+    (228.2, 46.2), (230.6, 50.5), (230.8, 56.5), (228.4, 61.6), (224.6, 63.6, 'c'),  # ear
+    (221.4, 69), (219.6, 77), (219.4, 86), (220.6, 93.5),                           # jaw -> neck
+    (225.2, 99.2), (233, 103.2), (242.6, 106.2), (252.4, 108.8), (262, 112.2),      # trapezius
+    (271.4, 117.8), (279.4, 125.6), (285, 135.6), (288.4, 146.8), (289.8, 157),     # deltoid
+    (292.6, 166.4), (298.4, 177.4), (304, 188.8), (308.4, 200.2),                   # upper arm (outer)
+    (311.6, 211.4), (314.8, 222.6),                                                 # elbow
+    (322, 233.4), (327.2, 244.2), (330.2, 255.2), (332.6, 265.6),                 # forearm -> wrist
+    (339, 270), (346.6, 274.2), (354.2, 279), (360.8, 283.4), (364.8, 286.8),       # back of hand -> thumb
+    (364.6, 290.2), (360.4, 291.2), (355.8, 290), (352.2, 291.4, 'c'),              # thumb tip -> web
+    (356.4, 298), (360.8, 306.6), (363.6, 314), (362.8, 318.6), (359, 318.8),       # index
+    (355.4, 311), (350.6, 300.4, 'c'),
+    (353.4, 310), (355.8, 318.6), (354.6, 324.2), (350.6, 325.4), (347.4, 321.2),   # middle
+    (344.8, 312.6), (342, 300.6, 'c'),
+    (344.2, 312.6), (346.4, 320.8), (344.6, 325.2), (340.6, 324.6), (338, 316.8),   # ring
+    (335.4, 302.6, 'c'),
+    (336.8, 314.4), (337.2, 319.6), (334.6, 322.4), (331.2, 320.2), (329.2, 311.2),  # pinky
+    (326.4, 299.6), (323, 289.4), (319.6, 280.4), (317.2, 273.4),                   # heel of the hand -> wrist
+    (312, 266.4), (303.6, 257.8), (294.8, 247.6), (286.2, 236.4),                  # forearm (inner)
+    (281.6, 225), (276.4, 214.4), (270.4, 203.4), (264.2, 191.6), (258.6, 179.6),   # inner elbow -> biceps
+    (255.5, 169, 'c'),                                                              # armpit
+    (256, 180), (255.6, 192), (254.4, 205), (252.8, 218), (251.2, 231),             # lat
+    (250, 245), (249.2, 259), (249, 273), (250, 287),                               # straight flank -> iliac crest
+    (251.8, 301), (254, 316), (256.2, 331), (258.2, 346),                           # hip -> outer thigh
+    (259.6, 361), (260.2, 376), (259.4, 389), (257.6, 401), (255.8, 410),           # vastus
+    (254.8, 422), (255.8, 435),                                                     # knee
+    (258, 446), (259.6, 457), (259.8, 468), (258.8, 480), (257.2, 493),             # calf
+    (255.6, 506), (254.4, 519), (253.8, 531), (254.2, 541),                         # shin -> ankle
+    (256.2, 550), (260, 558), (265.4, 566), (271, 573.6), (275.4, 580.4),           # top of the foot
+    (277, 585.6), (275.6, 589.2), (273.4, 590.6, 'c'),                              # little toe
+    (271.8, 592.4), (268.8, 593.4), (266.6, 592.8, 'c'),                            # 4th toe
+    (264.4, 594.2), (261, 594.8), (258.8, 593.8, 'c'),                              # 3rd toe
+    (256.4, 594.8), (252.6, 594.6), (250.6, 593.2, 'c'),                            # 2nd toe
+    (248, 593.4), (244.4, 591), (241.8, 586.4),                                     # big toe
+    (239.4, 580), (237, 572.8), (235, 564.6), (233.8, 556), (233.4, 548),           # inner foot -> ankle
+    (233.8, 537), (233, 524), (231.2, 511), (228.6, 497), (225.6, 483),             # inner calf
+    (223.2, 470), (222.2, 457), (222.8, 445), (222.4, 434),                         # inner calf -> knee
+    (220.8, 423), (218.2, 410), (215.6, 396), (213.2, 381), (211.2, 365),           # VMO -> inner thigh
+    (209.4, 349), (207.8, 334), (206.4, 321), (205, 311.4), (202.8, 304.4),         # straight inner thigh
+    (200, 302.4),                                                                   # crotch (round, thighs apart)
 ]
+ARM_SPLAY = 0.05        # extra x per unit of y below the armpit (arm and hand only)
+
+
+def _splay(p):
+    return (p[0] + ARM_SPLAY * max(0.0, p[1] - 160.0),) + tuple(p[1:])
+
+
+_A0 = BODY_HALF_D.index((289.8, 157))
+_A1 = BODY_HALF_D.index((255.5, 169, 'c'))
+BODY_HALF_D = BODY_HALF_D[:_A0 + 1] + [_splay(p) for p in BODY_HALF_D[_A0 + 1:_A1]] + BODY_HALF_D[_A1:]
+BODY_HALF = [B(*p) for p in BODY_HALF_D]
 
 
 def body_outline():
@@ -109,27 +141,38 @@ def body_outline():
     return right + left
 
 
-# Very quiet anatomy lines: open polylines (stroked only).
+# Very quiet anatomy lines, open splines in design units (stroked only).
+_BODY_DETAILS_D = [
+    [(203, 157), (214, 164.5), (229, 165.5), (241.5, 159), (249.5, 149)],        # pectoral
+    [(258.8, 165), (263.2, 151.5), (267.4, 138.5)],                                  # deltoid front border
+    [(246, 265), (235, 281.5), (221, 295), (209, 301)],                            # inguinal line
+    [(231, 427), (236.8, 431.6), (243.6, 431), (247.4, 426.4)],                  # kneecap
+]
+
+
 def body_details():
     lines = []
-    for s in (1, -1):
-        X = lambda x: CX + s * (x - CX)
-        lines += [
-            [(X(510), 200), (X(530), 203.5), (X(552), 199.5), (X(568), 188)],      # pectoral
-            [(X(548), 287), (X(530), 309), (X(512), 326)],                          # inguinal
-        ]
+    for line in _BODY_DETAILS_D:
+        pts = [B(*p) for p in line]
+        lines.append(pts)
+        lines.append([mirror_x(p) for p in pts])
     return lines
 
 
-BODY_JOINTS = {
-    "Head": (500, 74), "Neck": (500, 118),
-    "Spine3": (500, 154), "Spine2": (500, 190), "Spine1": (500, 227),
-    "Spine": (500, 263), "Hips": (500, 299),
+# Joint centres in body design units (screen-right = character's left side).
+_BODY_JOINTS_D = {
+    "Head": (200, 60), "Neck": (200, 92),
+    "Spine3": (200, 128), "Spine2": (200, 163), "Spine1": (200, 198),
+    "Spine": (200, 233), "Hips": (200, 268),
 }
+_SIDE_JOINTS_D = {
+    "Shoulder": (221, 111), "Arm": (266.5, 136), "ForeArm": _splay((299.6, 225)), "Hand": _splay((326.4, 273)),
+    "UpLeg": (228, 292), "Leg": (239, 436), "Foot": (243.8, 543), "ToeBase": (258, 579.5),
+}
+BODY_JOINTS = {k: B(*v) for k, v in _BODY_JOINTS_D.items()}
 for _side, _s in (("Left", 1), ("Right", -1)):
-    for _part, _x, _y in (("Shoulder", 541, 136), ("Arm", 584, 140), ("ForeArm", 697, 142),
-                          ("Hand", 791, 143), ("UpLeg", 545, 316), ("Leg", 549, 452),
-                          ("Foot", 553, 576), ("ToeBase", 562, 612)):
+    for _part, _p in _SIDE_JOINTS_D.items():
+        _x, _y = B(*_p)
         BODY_JOINTS[_side + _part] = (CX + _s * (_x - CX), _y)
 
 BODY_BONES = [("Hips", "Spine"), ("Spine", "Spine1"), ("Spine1", "Spine2"), ("Spine2", "Spine3"),
@@ -140,40 +183,188 @@ for _side in ("Left", "Right"):
                    ("Hips", _side + "UpLeg"), (_side + "UpLeg", _side + "Leg"),
                    (_side + "Leg", _side + "Foot"), (_side + "Foot", _side + "ToeBase")]
 
-# Label anchors: (x, y, align, text) where align is left/right/center and y is the
-# text's vertical centre. Screen-right values are mirrored for the character's right.
-BODY_LABELS = {
-    "Head": (541, 50, "left", "Head"),
-    "Neck": (513, 119, "left", "Neck"),
-    "Spine3": (520, 161, "left", "Spine 3"),
-    "Spine2": (520, 190, "left", "Spine 2"),
-    "Spine1": (520, 227, "left", "Spine 1"),
-    "Spine": (522, 263, "left", "Spine"),
-    "Hips": (522, 285, "left", "Hips"),
-}
-_SIDE_LABELS = {
-    "Shoulder": (529, 99.5, "left", "Shoulder"),
-    "Arm": (600, 104, "center", "Arm"),
-    "ForeArm": (697, 109, "center", "Forearm"),
-    "Hand": (800, 110, "center", "Hand"),
-    "UpLeg": (594, 316, "left", "Up Leg"),
-    "Leg": (584, 452, "left", "Leg"),
-    "Foot": (582, 576, "left", "Foot"),
-    "ToeBase": (594, 612, "left", "Toe"),
-}
-_FLIP = {"left": "right", "right": "left", "center": "center"}
-for _part, (_x, _y, _a, _t) in _SIDE_LABELS.items():
-    BODY_LABELS["Left" + _part] = (_x, _y, _a, _t)
-    BODY_LABELS["Right" + _part] = (2 * CX - _x, _y, _FLIP[_a], _t)
+REQUIRED = {"Hips", "Spine", "Head", "LeftArm", "LeftForeArm", "LeftHand", "RightArm", "RightForeArm",
+            "RightHand", "LeftUpLeg", "LeftLeg", "LeftFoot", "RightUpLeg", "RightLeg", "RightFoot"}
 
-# Alternative anchors used below scale 0.7, where pixel-sized text no longer fits
-# inside the torso.
-BODY_COMPACT = {"Spine": (578, 251, "left"), "Hips": (585, 283, "left")}
+# ---- body labels: two columns joined to the joints by leader lines (HumanIK style)
 
-BODY_HEADINGS = [("RIGHT", 210, 52, "center"), ("LEFT", 790, 52, "center")]
+TEXT = {"Head": "Head", "Neck": "Neck", "Spine3": "Spine 3", "Spine2": "Spine 2", "Spine1": "Spine 1",
+        "Spine": "Spine", "Hips": "Hips", "Shoulder": "Shoulder", "Arm": "Arm", "ForeArm": "Forearm",
+        "Hand": "Hand", "UpLeg": "Up Leg", "Leg": "Leg", "Foot": "Foot", "ToeBase": "Toe"}
+
+# Column geometry. Screen-right column (character's left side and the centre
+# chain): text left-aligned at COL_TEXT_R; the leader runs from the joint centre
+# to the bend (COL_BEND_R, label y) and then flat into the text.
+COL_TEXT_R, COL_BEND_R, COL_GAP = 734.0, 704.0, 6.0
+COL_TEXT_L, COL_BEND_L = 2 * CX - COL_TEXT_R, 2 * CX - COL_BEND_R
+
+# Label rows (label centre y), set by hand and checked by check_body_labels():
+# leaders as flat as possible, never crossing, clear of other joints.
+_ROWS_R = {"Head": 52, "Neck": 70, "Shoulder": 88, "Spine3": 106, "Arm": 146, "Spine2": 175,
+           "Spine1": 207, "ForeArm": 237, "Spine": 268, "Hand": 299, "Hips": 330, "UpLeg": 361,
+           "Leg": 463, "Foot": 582, "ToeBase": 614}
+BODY_LABEL_ROWS = {}
+for _k, _v in _ROWS_R.items():
+    if _k in ("Head", "Neck", "Spine3", "Spine2", "Spine1", "Spine", "Hips"):
+        BODY_LABEL_ROWS[_k] = _v
+    else:
+        BODY_LABEL_ROWS["Left" + _k] = _v
+        BODY_LABEL_ROWS["Right" + _k] = _v
+
+
+def body_label_side(role):
+    return "L" if role.startswith("Right") else "R"
+
+
+def body_leader(role, ly):
+    jx, jy = BODY_JOINTS[role]
+    if body_label_side(role) == "R":
+        return [(COL_TEXT_R - COL_GAP, ly), (COL_BEND_R, ly), (jx, jy)]
+    return [(COL_TEXT_L + COL_GAP, ly), (COL_BEND_L, ly), (jx, jy)]
+
+
+def _seg_dist(p, a, b):
+    ax, ay = a
+    bx, by = b
+    dx, dy = bx - ax, by - ay
+    L2 = dx * dx + dy * dy
+    t = 0.0 if L2 == 0 else max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / L2))
+    return math.hypot(ax + dx * t - p[0], ay + dy * t - p[1])
+
+
+def _cross(a, b, c, d):
+    def orient(p, q, r):
+        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+    o1, o2, o3, o4 = orient(a, b, c), orient(a, b, d), orient(c, d, a), orient(c, d, b)
+    return (o1 * o2 < 0) and (o3 * o4 < 0)
+
+
+def _angle_between(a, b, c, d):
+    u = (b[0] - a[0], b[1] - a[1])
+    v = (d[0] - c[0], d[1] - c[1])
+    cs = abs(u[0] * v[0] + u[1] * v[1]) / (math.hypot(*u) * math.hypot(*v))
+    return math.degrees(math.acos(min(1.0, cs)))
+
+
+# Clearance (viewBox units) a leader keeps from other joints, and the label row
+# spacing. Required labels stay 31 apart so they all still fit at the minimum
+# map size (scale ~0.52), where the optional ones in between hide.
+CLEAR_REQ, CLEAR_OPT = 17.0, 13.0
+ROW_ANY, ROW_REQ = 17.5, 31.0
+MIN_CROSS_ANGLE = 30.0
+
+
+def _leader_clear(role, ly):
+    """The leader keeps clear of every other joint and crosses bones steeply."""
+    pts = body_leader(role, ly)
+    seg = (pts[1], pts[2])
+    for other, p in BODY_JOINTS.items():
+        if other == role:
+            continue
+        c = CLEAR_REQ if other in REQUIRED else CLEAR_OPT
+        if _seg_dist(p, *seg) < c:
+            return False
+    for a, b in BODY_BONES:
+        if role in (a, b):
+            continue
+        pa, pb = BODY_JOINTS[a], BODY_JOINTS[b]
+        if _cross(seg[0], seg[1], pa, pb) and _angle_between(seg[0], seg[1], pa, pb) < MIN_CROSS_ANGLE:
+            return False
+    return True
+
+
+def _pair_ok(role, ly, other, oly):
+    if body_label_side(other) != body_label_side(role):
+        return True
+    need = ROW_REQ if (role in REQUIRED and other in REQUIRED) else ROW_ANY
+    if abs(oly - ly) < need:
+        return False
+    p, q = body_leader(role, ly), body_leader(other, oly)
+    return not _cross(p[1], p[2], q[1], q[2])
+
+
+def check_body_labels(rows=None):
+    rows = rows or BODY_LABEL_ROWS
+    bad = []
+    for role, ly in rows.items():
+        if not _leader_clear(role, ly):
+            bad.append((role, "joint/bone"))
+        for other, oly in rows.items():
+            if other < role and not _pair_ok(role, ly, other, oly):
+                bad.append((role, other))
+    return bad
+
+
+def solve_body_labels(span=80, step=1.0, budget=400000):
+    """Pick a row per label: leaders as flat as possible, no crossings, clear of joints.
+
+    Depth-first in joint height order, cheapest rows first, with a node budget;
+    the best complete layout found wins.
+    """
+    rows = {}
+    for side in ("R", "L"):
+        order = sorted((r for r in BODY_JOINTS if body_label_side(r) == side), key=lambda r: BODY_JOINTS[r][1])
+        valid = {}
+        for role in order:
+            jy = BODY_JOINTS[role][1]
+            c = [round(jy) + k * step for k in range(-int(span / step), int(span / step) + 1)]
+            valid[role] = sorted((y for y in c if 44 <= y <= 624 and _leader_clear(role, y)),
+                                 key=lambda y: abs(y - jy))
+        best = [None, 1e18]
+        nodes = [0]
+
+        def dfs(i, placed, cost):
+            nodes[0] += 1
+            if nodes[0] > budget or cost >= best[1]:
+                return
+            if i == len(order):
+                best[0], best[1] = dict(placed), cost
+                return
+            role = order[i]
+            jy = BODY_JOINTS[role][1]
+            for ly in valid[role]:
+                c = cost + (ly - jy) ** 2
+                if c >= best[1]:
+                    break
+                if all(_pair_ok(role, ly, o, oly) for o, oly in placed.items()):
+                    placed[role] = ly
+                    dfs(i + 1, placed, c)
+                    del placed[role]
+
+        dfs(0, {}, 0.0)
+        if best[0] is None:
+            raise RuntimeError("no leader layout for side " + side)
+        rows.update(best[0])
+    return rows
+
+
+def body_labels():
+    rows = BODY_LABEL_ROWS or solve_body_labels()
+    out = {}
+    for role in BODY_JOINTS:
+        base = role[4:] if role.startswith("Left") else role[5:] if role.startswith("Right") else role
+        ly = rows[role]
+        if body_label_side(role) == "R":
+            out[role] = (COL_TEXT_R, ly, "left", TEXT[base], body_leader(role, ly))
+        else:
+            out[role] = (COL_TEXT_L, ly, "right", TEXT[base], body_leader(role, ly))
+    return out
+
+
+BODY_HEADINGS = [("RIGHT", COL_TEXT_L, 18, "right"), ("LEFT", COL_TEXT_R, 18, "left")]
 
 
 # --------------------------------------------------------------------------- hands
+
+# Hand drawing board: the LEFT hand, palm towards the viewer, fingers up, thumb
+# pointing to screen-left (the centre of the panel). The right hand is its mirror.
+HK = 1.16
+HOX, HOY = 513.0, 22.0
+
+
+def Hd(x, y, *rest):
+    return (HOX + x * HK, HOY + y * HK) + tuple(rest)
+
 
 def _v(a, b):
     return (b[0] - a[0], b[1] - a[1])
@@ -184,148 +375,144 @@ def _unit(v):
     return (v[0] / l, v[1] / l)
 
 
-# Left hand, palm towards the viewer, fingers up, on the screen-right; the thumb
-# points to the centre. The right hand is its mirror image.
-# finger: base knuckle (joint 1), angle from vertical in degrees (+ = toward pinky),
-# phalanx lengths, half widths (at knuckle 1, 2, 3 and tip).
-FINGERS = {
-    "Index":  dict(base=(661, 350), ang=-6.0, ph=(106, 67, 53), w=(23.5, 20.5, 18.5, 15.5)),
-    "Middle": dict(base=(719, 338), ang=-0.5, ph=(117, 74, 58), w=(24.5, 21.5, 19.0, 16.0)),
-    "Ring":   dict(base=(775, 346), ang=5.5, ph=(109, 68, 55), w=(23.0, 20.0, 18.0, 15.0)),
-    "Pinky":  dict(base=(826, 370), ang=13.0, ph=(86, 52, 45), w=(20.0, 17.0, 15.5, 13.0)),
+# finger: knuckle (MCP, joint 1) and fingertip in design units; half widths at
+# the web, PIP, DIP and the tip radius. Joint 2 / 3 sit at 44 % / 72 % of the
+# knuckle-to-tip length.
+FINGERS_D = {
+    "Index":  dict(mcp=(166, 222), tip=(156, 51), w=(18.4, 17.0, 16.0, 15.0)),
+    "Middle": dict(mcp=(219, 214), tip=(237, 37), w=(19.0, 17.6, 16.6, 15.4)),
+    "Ring":   dict(mcp=(266, 228), tip=(296, 71), w=(18.0, 16.6, 15.6, 14.4)),
+    "Pinky":  dict(mcp=(299, 254), tip=(354, 138), w=(16.0, 14.8, 13.8, 12.8)),
 }
-WEB = 0.42          # finger web height, as a fraction of the proximal phalanx
+PIP_AT, DIP_AT = 0.44, 0.72
+WEB_T = {"Index": 0.25, "Middle": 0.23, "Ring": 0.23, "Pinky": 0.22}   # web height, fraction of length
 
 
-def finger_frame(f):
-    a = math.radians(f["ang"])
-    u = (math.sin(a), -math.cos(a))            # along the finger (up)
-    n = (-u[1], u[0])                          # to the pinky side
+def _finger_frame(f):
+    u = _unit(_v(f["mcp"], f["tip"]))
+    n = (-u[1], u[0])            # n points to the pinky side for this hand (fingers up)
     return u, n
 
 
-def finger_joints(f):
-    u, _ = finger_frame(f)
-    b = f["base"]
-    out, t = [b], 0.0
-    for L in f["ph"][:2]:
-        t += L
-        out.append((b[0] + u[0] * t, b[1] + u[1] * t))
-    return out
+def _finger_len(f):
+    return math.hypot(*_v(f["mcp"], f["tip"]))
 
 
-def finger_side(f, side):
+def finger_joints_d(f):
+    u, _ = _finger_frame(f)
+    L = _finger_len(f)
+    m = f["mcp"]
+    return [m, (m[0] + u[0] * L * PIP_AT, m[1] + u[1] * L * PIP_AT),
+            (m[0] + u[0] * L * DIP_AT, m[1] + u[1] * L * DIP_AT)]
+
+
+def _finger_side(name, side):
     """Points up one side of a finger (side=-1 thumb side, +1 pinky side), from the web."""
-    u, n = finger_frame(f)
-    b = f["base"]
-    p1, p2, p3 = f["ph"]
+    f = FINGERS_D[name]
+    u, n = _finger_frame(f)
+    L = _finger_len(f)
+    m = f["mcp"]
     w1, w2, w3, wt = f["w"]
-    # (t along finger, half width): pads between creases bulge slightly.
-    prof = [(p1 * WEB, w1 - 0.5), (p1 * .72, w1 - 1.2), (p1, w2 + 0.6), (p1 + p2 * .5, w2 - 0.7),
-            (p1 + p2, w3 + 0.5), (p1 + p2 + p3 * .45, w3 - 0.3), (p1 + p2 + p3 - wt * 0.9, wt)]
-    pts = []
-    for t, w in prof:
-        pts.append((b[0] + u[0] * t + n[0] * w * side, b[1] + u[1] * t + n[1] * w * side))
-    return pts
+    prof = [(L * WEB_T[name], w1 + 1.2), (L * 0.33, w1 - 0.4), (L * PIP_AT, w2 + 0.5), (L * 0.58, w2 - 0.6),
+            (L * DIP_AT, w3 + 0.4), (L * 0.84, w3 - 0.3), (L - wt * 0.95, wt)]
+    return [(m[0] + u[0] * t + n[0] * w * side, m[1] + u[1] * t + n[1] * w * side) for t, w in prof]
 
 
-def finger_tip(f):
-    u, n = finger_frame(f)
-    b = f["base"]
-    L = sum(f["ph"])
+def _finger_tip(name):
+    f = FINGERS_D[name]
+    u, n = _finger_frame(f)
+    L = _finger_len(f)
     wt = f["w"][3]
-    c = (b[0] + u[0] * (L - wt), b[1] + u[1] * (L - wt))
+    c = (f["mcp"][0] + u[0] * (L - wt), f["mcp"][1] + u[1] * (L - wt))
     pts = []
-    for deg in (-55, -25, 0, 25, 55):          # around the rounded tip, thumb side -> pinky side
+    for deg in (-52, -24, 0, 24, 52):         # thumb side -> pinky side
         a = math.radians(deg)
         d = (u[0] * math.cos(a) + n[0] * math.sin(a), u[1] * math.cos(a) + n[1] * math.sin(a))
-        r = wt * (1.0 if deg == 0 else 0.98)
-        pts.append((c[0] + d[0] * r, c[1] + d[1] * r))
+        pts.append((c[0] + d[0] * wt, c[1] + d[1] * wt))
     return pts
 
 
-THUMB = dict(cmc=(676, 514), mcp=(624, 448), ip=(587, 395), tip_len=57)
-# stations along the thumb axis: (segment index, fraction, outer half width, inner half width)
-THUMB_PROFILE = [(0, 0.0, 45, None), (0, 0.45, 37, None), (0, 0.82, 27.5, None), (1, 0.0, 24.5, None),
-                 (1, 0.5, 21.0, 19.8), (2, 0.0, 21.8, 20.6), (2, 0.42, 20.6, 19.6)]
+# Thumb axis: CMC (joint 1), MCP (2), IP (3) and the tip centre, in design units.
+THUMB_D = dict(cmc=(178, 330), mcp=(126, 283), ip=(82, 245), tipc=(37, 226))
 
 
-def thumb_joints():
-    return [THUMB["cmc"], THUMB["mcp"], THUMB["ip"]]
+def _thumb_frame(a, b):
+    u = _unit(_v(a, b))                  # towards the tip
+    up = (-u[1], u[0])                   # towards the index (upper edge)
+    return u, up
 
 
-def _thumb_axis():
-    cmc, mcp, ip = thumb_joints()
-    u = _unit(_v(mcp, ip))
-    tip = (ip[0] + u[0] * THUMB["tip_len"], ip[1] + u[1] * THUMB["tip_len"])
-    return [cmc, mcp, ip, tip]
+def thumb_joints_d():
+    return [THUMB_D["cmc"], THUMB_D["mcp"], THUMB_D["ip"]]
 
 
-def _thumb_station(seg, frac, w, side):
-    axis = _thumb_axis()
-    a, b = axis[seg], axis[seg + 1]
-    u = _unit(_v(a, b))
-    if frac == 0.0 and seg > 0:                     # average the direction at a knuckle
-        u0 = _unit(_v(axis[seg - 1], a))
-        u = _unit((u[0] + u0[0], u[1] + u0[1]))
-    n = (u[1], -u[0])                               # outer side (away from the index)
-    p = (a[0] + (b[0] - a[0]) * frac, a[1] + (b[1] - a[1]) * frac)
-    return (p[0] + n[0] * w * side, p[1] + n[1] * w * side)
+def _thumb_station(seg_a, seg_b, frac, w):
+    """Point at `frac` along the thumb segment a->b, offset `w` towards the index (w<0: palm side)."""
+    u, up = _thumb_frame(seg_a, seg_b)
+    p = (seg_a[0] + (seg_b[0] - seg_a[0]) * frac, seg_a[1] + (seg_b[1] - seg_a[1]) * frac)
+    return (p[0] + up[0] * w, p[1] + up[1] * w)
+
+
+# Finger webs (bottom of the gap between two fingers), in hand design units.
+WEBS_D = {("Index", "Middle"): (191.5, 187.5), ("Middle", "Ring"): (245.5, 194.5), ("Ring", "Pinky"): (293.5, 221)}
+
+
+def _web(left, right):
+    b = WEBS_D[(left, right)]
+    ul, _ = _finger_frame(FINGERS_D[left])
+    ur, _ = _finger_frame(FINGERS_D[right])
+    u = _unit((ul[0] + ur[0], ul[1] + ur[1]))
+    n = (-u[1], u[0])
+    return [(b[0] + u[0] * 5.5 - n[0] * 4.6, b[1] + u[1] * 5.5 - n[1] * 4.6), b,
+            (b[0] + u[0] * 5.5 + n[0] * 4.6, b[1] + u[1] * 5.5 + n[1] * 4.6)]
+
+
+def hand_outline_left_d():
+    t = THUMB_D
+    tc = t["tipc"]
+    pts = []
+    # forearm (radial side) up to the wrist, then the thenar eminence and the thumb's palm edge
+    pts += [(190, 560), (186, 520), (181.5, 478), (177.5, 436), (175, 402), (171.4, 382)]
+    pts += [(161.4, 366.6), (145.6, 350), (129.4, 332.4), (113.6, 314.6), (99.4, 298), (85, 282.8),
+            (70.6, 269.4), (55.6, 257.4), (41.4, 248.4)]
+    r = 16.8
+    u2, up2 = _thumb_frame(t["ip"], tc)
+    for deg in (-62, -30, 0, 30, 62):            # round tip, palm side -> index side
+        ang = math.radians(deg)
+        d = (u2[0] * math.cos(ang) + up2[0] * math.sin(ang), u2[1] * math.cos(ang) + up2[1] * math.sin(ang))
+        pts.append((tc[0] + d[0] * r, tc[1] + d[1] * r))
+    # thumb, upper edge back to the thumb-index web and the radial side of the index
+    pts += [(52, 210.6), (68.4, 216), (84, 224.4), (98.6, 234.4), (111.8, 245.4)]
+    pts += [(121.8, 255.6), (128.6, 259.4), (135.6, 256.6), (141.4, 247.4), (144.4, 234)]
+    order = ["Index", "Middle", "Ring", "Pinky"]
+    for i, name in enumerate(order):
+        if i > 0:
+            pts += _web(order[i - 1], name)
+        pts += _finger_side(name, -1)[1:] + _finger_tip(name)
+        pts += list(reversed(_finger_side(name, +1)))[:-1]
+    # ulnar edge (hypothenar) down to the wrist and the forearm
+    pts += [(327, 237.5), (321.6, 253), (315.6, 272), (308.2, 293), (300.6, 312.6), (293, 331.4),
+            (286.6, 347.6), (282.6, 361), (281.8, 376), (283, 398), (287, 432), (293, 468), (301, 503),
+            (310, 538), (318, 564)]
+    return pts
 
 
 def hand_outline_left():
-    pts = []
-    # forearm stub (radial side) -> thenar eminence -> thumb outer edge
-    pts += [(653, 652), (653, 624), (655, 598), (651, 574)]
-    for seg, frac, wo, wi in THUMB_PROFILE:
-        pts.append(_thumb_station(seg, frac, wo, +1))
-    axis = _thumb_axis()
-    tip, ip = axis[3], axis[2]
-    u = _unit(_v(ip, tip))
-    n = (u[1], -u[0])
-    rt = 17.6
-    c = (tip[0] - u[0] * rt, tip[1] - u[1] * rt)
-    for deg in (-62, -30, 0, 30, 62):
-        a = math.radians(deg)
-        d = (u[0] * math.cos(a) - n[0] * math.sin(a), u[1] * math.cos(a) - n[1] * math.sin(a))
-        pts.append((c[0] + d[0] * rt, c[1] + d[1] * rt))
-    for seg, frac, wo, wi in reversed(THUMB_PROFILE):
-        if wi is not None:
-            pts.append(_thumb_station(seg, frac, wi, -1))
-    pts += [(631, 424.5), (639.5, 433), (644.5, 426), (643.5, 408), (640.5, 388)]   # thumb-index web
-    order = ["Index", "Middle", "Ring", "Pinky"]
-    for i, name in enumerate(order):
-        f = FINGERS[name]
-        left_side = finger_side(f, -1)
-        if i > 0:
-            left_side = left_side[1:]
-        pts += left_side
-        pts += finger_tip(f)
-        right_side = list(reversed(finger_side(f, +1)))
-        if i < len(order) - 1:
-            nxt = FINGERS[order[i + 1]]
-            a = right_side[-1]
-            b = finger_side(nxt, -1)[0]
-            valley = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + 7)
-            pts += right_side[:-1] + [valley]
-        else:
-            pts += right_side[:-1]          # the pinky blends into the hypothenar edge
-    # ulnar edge (hypothenar) down to the wrist and forearm
-    pts += [(851.5, 352), (855, 392), (859, 428), (861, 464), (856, 506), (844, 545), (830, 577), (822, 602), (821, 627), (821, 652)]
-    return pts
+    return [Hd(*p) for p in hand_outline_left_d()]
 
 
 HAND_JOINTS = {}
 HAND_BONES = []
+_WRIST_D = (225, 371)
 for _side, _s in (("Left", 1), ("Right", -1)):
     _m = lambda p, s=_s: (CX + s * (p[0] - CX), p[1])
     _wrist = _side + "Hand"
-    HAND_JOINTS[_wrist] = _m((736, 570))
-    for _name, _f in FINGERS.items():
-        for _i, _p in enumerate(finger_joints(_f), 1):
-            HAND_JOINTS["%sHand%s%d" % (_side, _name, _i)] = _m(_p)
-    for _i, _p in enumerate(thumb_joints(), 1):
-        HAND_JOINTS["%sHandThumb%d" % (_side, _i)] = _m(_p)
+    HAND_JOINTS[_wrist] = _m(Hd(*_WRIST_D))
+    for _name, _f in FINGERS_D.items():
+        for _i, _p in enumerate(finger_joints_d(_f), 1):
+            HAND_JOINTS["%sHand%s%d" % (_side, _name, _i)] = _m(Hd(*_p))
+    for _i, _p in enumerate(thumb_joints_d(), 1):
+        HAND_JOINTS["%sHandThumb%d" % (_side, _i)] = _m(Hd(*_p))
     for _name in ("Thumb", "Index", "Middle", "Ring", "Pinky"):
         _r = "%sHand%s" % (_side, _name)
         HAND_BONES += [(_wrist, _r + "1"), (_r + "1", _r + "2"), (_r + "2", _r + "3")]
@@ -333,12 +520,12 @@ for _side, _s in (("Left", 1), ("Right", -1)):
 
 def _finger_label_pos(name):
     if name == "Thumb":
-        tip = _thumb_axis()[3]
-        return (tip[0] + 10, tip[1] - 26)
-    f = FINGERS[name]
-    u, _ = finger_frame(f)
-    L = sum(f["ph"]) + 22
-    return (f["base"][0] + u[0] * L, f["base"][1] + u[1] * L)
+        x, y = Hd(*THUMB_D["tipc"])
+        return (x + 2, y - 40)
+    f = FINGERS_D[name]
+    u, _ = _finger_frame(f)
+    x, y = Hd(*f["tip"])
+    return (x + u[0] * 22, y + u[1] * 22)
 
 
 HAND_LABELS = {}
@@ -346,8 +533,6 @@ for _side, _s in (("Left", 1), ("Right", -1)):
     for _name in ("Thumb", "Index", "Middle", "Ring", "Pinky"):
         x, y = _finger_label_pos(_name)
         HAND_LABELS["%sHand%s" % (_side, _name)] = (CX + _s * (x - CX), y, "center", _name)
-    HAND_LABELS[_side + "Hand"] = (CX + _s * (736 - CX), 604, "center", "Wrist")
-HAND_HEADINGS = [("RIGHT HAND", 40, 36, "left"), ("LEFT HAND", 960, 36, "right")]
-
-REQUIRED = {"Hips", "Spine", "Head", "LeftArm", "LeftForeArm", "LeftHand", "RightArm", "RightForeArm",
-            "RightHand", "LeftUpLeg", "LeftLeg", "LeftFoot", "RightUpLeg", "RightLeg", "RightFoot"}
+    wx, wy = Hd(*_WRIST_D)
+    HAND_LABELS[_side + "Hand"] = (CX + _s * (wx - CX), wy + 36, "center", "Wrist")
+HAND_HEADINGS = [("RIGHT HAND", 14, 20, "left"), ("LEFT HAND", 986, 20, "right")]

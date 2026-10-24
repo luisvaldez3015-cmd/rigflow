@@ -370,12 +370,16 @@ class UISmokeTests(unittest.TestCase):
         body.states = {role: "assigned" for role in BODY_SLOTS}
         body.show()
         self.app.processEvents()
-        self.assertTrue(all(body.role_at(body.slot_position(role)) == role for role in BODY_SLOTS))
+        for width, height in ((1110, 600), (910, 330)):
+            body.resize(width, height)
+            self.assertTrue(all(body.role_at(body.slot_position(role)) == role for role in BODY_SLOTS))
         self.assertFalse(body.grab().isNull())
         body.set_hands(True)
         body.states = {role: "assigned" for role in hand_slots()}
         self.app.processEvents()
-        self.assertTrue(all(body.role_at(body.slot_position(role)) == role for role in hand_slots()))
+        for width, height in ((1110, 600), (910, 330)):
+            body.resize(width, height)
+            self.assertTrue(all(body.role_at(body.slot_position(role)) == role for role in hand_slots()))
         self.assertFalse(body.grab().isNull())
         body.waiting = "LeftHandMiddle2"
         body.states["LeftHandMiddle2"] = "waiting"
@@ -383,6 +387,47 @@ class UISmokeTests(unittest.TestCase):
         body.states["LeftHandIndex3"] = "required"
         self.assertFalse(body.grab().isNull())
         body.close()
+
+    def test_definition_leaders_visibility_colour_and_click_through(self):
+        from rigflow.ui.qt import QtGui
+        from rigflow.skeleton.roles import REQUIRED_ROLES
+        from rigflow.ui.widgets.body_map import BodyMap, _LAYOUT
+        body = BodyMap()
+        self.addCleanup(body.close)
+        body.resize(910, 330)
+        scale, ox, oy = body._transform()
+        labels = _LAYOUT["body"]["labels"]
+        style = _LAYOUT["style"]
+        visible = {role for role, lb in labels.items() if scale >= lb.get("minScale", 0)}
+        self.assertTrue(set(labels) - visible)  # The minimum size hides optional labels.
+        self.assertTrue(set(REQUIRED_ROLES) <= visible)
+        painter = mock.Mock()
+        body.waiting = "LeftForeArm"
+        body.hovered = "Spine1"
+        body._draw_leaders(painter, scale, ox, oy)
+        self.assertEqual(painter.drawPolyline.call_count, len(visible))
+        # Compare the actual painted polylines and pens, including hidden leaders.
+        polylines = painter.drawPolyline.call_args_list
+        pens = painter.setPen.call_args_list
+        for role, poly_call, pen_call in zip((r for r in labels if r in visible), polylines, pens):
+            poly, pen = poly_call.args[0], pen_call.args[0]
+            expected = [QtCore.QPointF(ox + x * scale, oy + y * scale) for x, y in labels[role]["leader"]]
+            self.assertEqual(list(poly), expected)
+            hot = role in (body.waiting, body.hovered)
+            self.assertAlmostEqual(pen.color().alphaF(), style["leader"]["hotOpacity" if hot else "opacity"], places=2)
+            self.assertEqual(pen.widthF(), style["leader"]["widthPx"])
+            colour = body._label_style(role)[1]
+            self.assertEqual(pen.color().name(), QtGui.QColor(colour).name())
+            # Leaders remain visual only; their start never arms a joint.
+            self.assertIsNone(body.role_at(poly[0]))
+        body._draw_labels(painter, scale, ox, oy)
+        expected_text = [lb["text"] for role, lb in labels.items() if role in visible]
+        expected_text.extend(hd["text"] for hd in _LAYOUT["body"]["headings"])
+        self.assertEqual([call.args[-1] for call in painter.drawText.call_args_list], expected_text)
+        body.set_hands(True)
+        painter.reset_mock()
+        body._draw_leaders(painter, scale, ox, oy)
+        painter.drawPolyline.assert_not_called()
 
     def test_definition_slot_first_wrong_model_cancel_and_joint_first(self):
         from PySide2.QtTest import QTest

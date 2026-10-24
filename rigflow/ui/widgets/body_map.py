@@ -258,29 +258,52 @@ class BodyMap(QtWidgets.QWidget):
         left = x if align == "left" else x - width if align == "right" else x - width / 2.0
         return QtCore.QRectF(left, y - height / 2.0, width, height)
 
+    def _visible_labels(self, scale):
+        """Share label visibility and compact anchors with their leaders."""
+        for role, data in _LAYOUT[self._view_name()].get("labels", {}).items():
+            if scale < data.get("minScale", 0):
+                continue
+            compact = data.get("compact")
+            anchor = dict(compact, text=data["text"]) if compact and scale < compact.get("below", 0) else data
+            yield role, anchor
+
+    def _label_style(self, role):
+        view = _LAYOUT[self._view_name()]
+        style = _LAYOUT["style"]["label"]
+        required = self.hands or view["joints"].get(role, {}).get("required", False) or role in REQUIRED_ROLES
+        colour = style["required"] if required else style["optional"]
+        state = self._state(role) if role in view["joints"] else None
+        if state == "required":
+            colour = style["requiredEmpty"]
+        elif state == "waiting":
+            colour = style["waiting"]
+        return style["requiredPx"] if required else style["optionalPx"], colour
+
+    def _draw_leaders(self, painter, scale, ox, oy):
+        style = _LAYOUT["style"].get("leader", {})
+        for role, anchor in self._visible_labels(scale):
+            points = anchor.get("leader")
+            if not points:
+                continue
+            _, colour = self._label_style(role)
+            hot = self._state(role) == "waiting" or role == self.hovered
+            opacity = style.get("hotOpacity", 0.9) if hot else style.get("opacity", 0.38)
+            painter.setPen(QtGui.QPen(_qcolor(colour, opacity), style.get("widthPx", 1.0),
+                                      QtCore.Qt.SolidLine, QtCore.Qt.RoundCap, QtCore.Qt.RoundJoin))
+            painter.setBrush(QtCore.Qt.NoBrush)
+            painter.drawPolyline(self._polygon([
+                QtCore.QPointF(ox + x * scale, oy + y * scale) for x, y in points]))
+
     def _draw_labels(self, painter, scale, ox, oy):
         view = _LAYOUT[self._view_name()]
         label_style = _LAYOUT["style"]["label"]
-        for role, anchor_data in view.get("labels", {}).items():
-            if scale < anchor_data.get("minScale", 0):
-                continue
-            anchor = anchor_data
-            compact = anchor_data.get("compact")
-            if compact and scale < compact.get("below", 0):
-                anchor = dict(compact, text=anchor_data["text"])
-            required = self.hands or view["joints"].get(role, {}).get("required", False) or role in REQUIRED_ROLES
-            size = label_style["requiredPx"] if required else label_style["optionalPx"]
+        for role, anchor in self._visible_labels(scale):
+            size, colour = self._label_style(role)
             font = _font(label_style, size)
             painter.setFont(font)
             metrics = QtGui.QFontMetricsF(font)
             x, y = ox + anchor["x"] * scale, oy + anchor["y"] * scale
             rect = self._label_rect(metrics, anchor, x, y)
-            state = self._state(role) if role in view["joints"] else None
-            colour = label_style["required"] if required else label_style["optional"]
-            if state == "required":
-                colour = label_style["requiredEmpty"]
-            elif state == "waiting":
-                colour = label_style["waiting"]
             painter.setPen(_qcolor(colour))
             painter.drawText(rect, QtCore.Qt.AlignCenter, anchor["text"])
         heading_style = _LAYOUT["style"]["label"]
@@ -305,6 +328,7 @@ class BodyMap(QtWidgets.QWidget):
         scale, ox, oy = self._transform()
         target = QtCore.QRectF(ox, oy, _LAYOUT["viewBox"][2] * scale, _LAYOUT["viewBox"][3] * scale)
         self._renderers[view_name].render(painter, target)
+        self._draw_leaders(painter, scale, ox, oy)
         centres = {role: self._screen_point(role) for role in view["joints"]}
         radii = {role: self._radius(role, scale) for role in view["joints"]}
         for parent, child in view.get("bones", []):

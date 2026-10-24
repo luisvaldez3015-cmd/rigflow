@@ -12,7 +12,7 @@
 > **Status: alpha, under active development.** Model detection, skeleton
 > analysis, joint matching, FBX/OBJ/Maya import, rig fitting and binding, the
 > HumanIK and matrix retargeting backends and the PySide interface are
-> implemented and covered by 107 unit tests and 76 Maya integration tests
+> implemented and covered by 111 unit tests and 76 Maya integration tests
 > (Maya 2023 and 2024), plus an end-to-end check inside Maya's UI. No public
 > release has been cut yet. See `CHANGELOG.md`.
 
@@ -38,7 +38,8 @@ live HumanIK preview at frame 24 before baking.
   model. Same-topology weights are exact, including shifted and scaled copies.
 - Labels both skeletons against a canonical humanoid template using joint
   names **and** hierarchy topology, with a confidence score for every joint.
-- Defines each character on a HumanIK-style body and hands map: click a slot,
+- Defines each character on a HumanIK-style A-pose body map with leader-line
+  labels and an open-hand map: click a slot,
   select its joint in Maya, and keep manual fixes through Auto-detect. The main
   viewport isolates the active model with joint X-ray and restores on exit.
 - Retargets body animation onto the destination skeleton with a live preview

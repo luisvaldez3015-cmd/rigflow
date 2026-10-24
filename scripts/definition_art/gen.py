@@ -44,15 +44,15 @@ def silhouette(pid, d, fill, stroke, halo):
 
 
 def write_body():
-    defs = gradient("skin", 16, 632, [(0, FILL_TOP, 1), (1, FILL_BOTTOM, 1)])
-    body = '<ellipse cx="500" cy="631" rx="118" ry="5.5" fill="#25292b" fill-opacity="0.7"/>\n'
+    defs = gradient("skin", 12, 632, [(0, FILL_TOP, 1), (1, FILL_BOTTOM, 1)])
+    body = '<ellipse cx="500" cy="631" rx="92" ry="5" fill="#25292b" fill-opacity="0.7"/>\n'
     body += silhouette("body", geom.catmull_path(geom.body_outline()), "url(#skin)", RIM, HALO)
     body += '<g fill="none" stroke="%s" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">\n' % DETAIL
     for line in geom.body_details():
         d = geom.catmull_path(line, closed=False) if len(line) > 2 else polyline_d(line)
         body += '<path d="%s"/>\n' % d
     body += '</g>\n'
-    with open(os.path.join(OUT, "body.svg"), "w") as f:
+    with open(os.path.join(OUT, "body.svg"), "w", encoding="utf-8", newline="\n") as f:
         f.write(svg_doc(body, defs))
 
 
@@ -66,7 +66,7 @@ def write_hands():
     body = ""
     for name, pts in (("right-hand", right), ("left-hand", left)):
         body += silhouette(name, geom.catmull_path(pts), "url(#skin)", "url(#rim)", "url(#halo)")
-    with open(os.path.join(OUT, "hands.svg"), "w") as f:
+    with open(os.path.join(OUT, "hands.svg"), "w", encoding="utf-8", newline="\n") as f:
         f.write(svg_doc(body, defs))
 
 
@@ -79,9 +79,12 @@ def joints_dict(joints, required_r, optional_r, required):
 
 def labels_dict(labels, min_scales, compact=None):
     out = {}
-    for role, (x, y, a, t) in labels.items():
+    for role, item in labels.items():
+        x, y, a, t = item[:4]
         out[role] = {"text": t, "x": round(x, 1), "y": round(y, 1), "align": a,
                      "minScale": min_scales.get(role, 0)}
+        if len(item) > 4:
+            out[role]["leader"] = [[round(px, 1), round(py, 1)] for px, py in item[4]]
         if compact and role in compact:
             cx, cy, ca = compact[role]
             out[role]["compact"] = {"x": cx, "y": cy, "align": ca, "below": 0.7}
@@ -97,7 +100,7 @@ def write_layout(min_scales=None):
             "svg": "body.svg",
             "joints": joints_dict(geom.BODY_JOINTS, 10, 7, geom.REQUIRED),
             "bones": [list(b) for b in geom.BODY_BONES],
-            "labels": labels_dict(geom.BODY_LABELS, min_scales.get("body", {}), geom.BODY_COMPACT),
+            "labels": labels_dict(geom.body_labels(), min_scales.get("body", {})),
             "headings": [{"text": t, "x": x, "y": y, "align": a} for t, x, y, a in geom.BODY_HEADINGS],
         },
         "hands": {
@@ -108,7 +111,7 @@ def write_layout(min_scales=None):
             "headings": [{"text": t, "x": x, "y": y, "align": a} for t, x, y, a in geom.HAND_HEADINGS],
         },
     }
-    with open(os.path.join(OUT, "layout.json"), "w") as f:
+    with open(os.path.join(OUT, "layout.json"), "w", encoding="utf-8", newline="\n") as f:
         json.dump(layout, f, indent=1)
 
 
@@ -121,4 +124,6 @@ if __name__ == "__main__":
         with open(p) as f:
             ms = json.load(f)
     write_layout(ms)
+    with open(os.path.join(OUT, "joint-style.md"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(style.JOINT_STYLE_DOC)
     print("wrote", OUT)

@@ -49,6 +49,13 @@ def main(argv=None):
             raise RuntimeError("Could not save " + str(path))
         print(str(path))
 
+    def capture_map(name):
+        app.processEvents()
+        path = output / (name + ".png")
+        if not window.match_view.body_map.grab().save(str(path), "PNG"):
+            raise RuntimeError("Could not save " + str(path))
+        print(str(path))
+
     capture("01_setup_empty")
     controller.add_model_from_file("mixamorig_walk.fbx")
     capture("02_setup_one_model")
@@ -60,6 +67,7 @@ def main(argv=None):
     match = clip.mapping.matches["Hips"]
     controller.set_manual_match(clip.clip_id, match.role, match.source, match.destination)
     capture("04_match")
+    capture_map("04_match_body_map")
     window.open_transfer(clip.clip_id)
     window.transfer_view._set_frame(24)
     capture("05_transfer")
@@ -79,10 +87,12 @@ def main(argv=None):
     controller.selection = []
     view.click_slot("LeftHand")
     capture("07_match_waiting")
+    capture_map("07_match_waiting_map")
     controller.selection = ["l_wrist_JNT"]
     view.poll_selection()
     view.map_tabs.setCurrentIndex(1)
     capture("07_match_hands")
+    capture_map("07_match_hands_map")
     window.show_setup()
     controller.replace_model_from_file(destination.character_id, "other.obj")
     capture("08_setup_dissimilar_mesh")

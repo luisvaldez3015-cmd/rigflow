@@ -14,12 +14,13 @@ from PySide2 import QtCore, QtGui, QtSvg, QtWidgets  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ASSETS = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "assets", "definition")
 OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.environ.get("TEMP", "/tmp"), "rigflow_definition_art")
+os.makedirs(OUT, exist_ok=True)
 app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
 CARD = "#2f2f2f"
 
 # ----------------------------------------------------------------------- joint style
-from style import BONE, BONE_EDGE, JOINT as STYLE, LABEL, MIN_PX  # noqa: E402
+from style import BONE, BONE_EDGE, JOINT as STYLE, LABEL, LEADER, MIN_PX  # noqa: E402
 
 
 def color(c, a=1.0):
@@ -190,6 +191,14 @@ def compute_labels(view, data, w, h, required_px=11, optional_px=10):
         rr = r + 2.5 + (9 if True else 0) * 0  # waiting halo is allowed to touch labels
         path.addEllipse(QtCore.QPointF(*pt), rr, rr)
         obstacles.append(path)
+    leader_paths = {}
+    stroker = QtGui.QPainterPathStroker()
+    stroker.setWidth(LEADER["widthPx"] + 2.0)
+    for role, lb in data["labels"].items():
+        if "leader" in lb:
+            lp = QtGui.QPainterPath()
+            lp.addPolygon(qpoly([P(*pt) for pt in lb["leader"]]))
+            leader_paths[role] = stroker.createStroke(lp)
     placed, results = [], {}
     order = sorted(data["labels"].items(), key=lambda kv: (0 if joints.get(kv[0], {}).get("required") else 1))
     # headings first
@@ -221,6 +230,9 @@ def compute_labels(view, data, w, h, required_px=11, optional_px=10):
         for other in placed:
             if other.intersects(test):
                 reason = "label"
+        for r2, lp in leader_paths.items():
+            if r2 != role and lp.intersects(test):
+                reason = "leader"
         results[role] = (rect, f, reason)
         if reason is None:
             placed.append(test)
@@ -269,6 +281,29 @@ def render(view, data, w, h, states, waiting, hovered, path, svg_name, number_fi
             return "waiting"
         return states.get(role, "required" if joints[role]["required"] else "empty")
 
+    def label_colour(role):
+        req = joints.get(role, {}).get("required", False) or view == "hands"
+        st = state_of(role) if role in joints else None
+        col = LABEL["required"] if req else LABEL["optional"]
+        if st == "required":
+            col = LABEL["requiredEmpty"]
+        if st == "waiting":
+            col = LABEL["waiting"]
+        return col, st
+
+    # Leaders sit under the bones and joints: they end at the joint centre and the
+    # sphere covers the tip.
+    for role, lb in data["labels"].items():
+        if "leader" not in lb or (s < lb.get("minScale", 0) and not os.environ.get("DEBUG")):
+            continue
+        col, st = label_colour(role)
+        hot = st == "waiting" or role == hovered
+        pen = QtGui.QPen(color(col, LEADER["hotOpacity"] if hot else LEADER["opacity"]), LEADER["widthPx"])
+        pen.setCapStyle(QtCore.Qt.RoundCap)
+        pen.setJoinStyle(QtCore.Qt.RoundJoin)
+        p.setPen(pen)
+        p.setBrush(QtCore.Qt.NoBrush)
+        p.drawPolyline(qpoly([P(*pt) for pt in lb["leader"]]))
     for a, b in data["bones"]:
         sa, sb = state_of(a), state_of(b)
         kind = "neutral"
@@ -363,7 +398,8 @@ if __name__ == "__main__":
             bad = render(view, data, w, h, st, waiting, hov, out, data["svg"])
             report["%s/%s" % (view, size_name)] = bad
         report[view + "_spacing"] = [("%.2f" % r, "%.0f" % d, a, b) for r, d, a, b in spacing_report(view, data)]
-    with open(os.path.join(OUT, "_min_scales.json"), "w") as f:
+    min_scales_path = os.environ.get("RIGFLOW_MIN_SCALES", os.path.join(OUT, "_min_scales.json"))
+    with open(min_scales_path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(ms_all, f, indent=1)
     for k, v in report.items():
         print(k, v)
