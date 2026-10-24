@@ -23,7 +23,8 @@ docs/user/          artist-facing guides (linked from the Help menu)
 docs/developer/     this folder
 docs/development/   milestone reports and decisions
 examples/           scripts that generate demo scenes procedurally
-assets/             icon.svg and generated PNG icons
+assets/             icon.svg, generated PNG icons and definition-map art
+scripts/definition_art/  reproducible silhouette/layout generators and mockup renderer
 ```
 
 ## Running the tests

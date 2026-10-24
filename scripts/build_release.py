@@ -19,7 +19,7 @@ import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PACKAGE = "rigflow"
-INCLUDE_DIRS = ("rigflow", "assets/icons", "docs/user", "examples")
+INCLUDE_DIRS = ("rigflow", "assets", "docs/user", "examples")
 INCLUDE_FILES = (
     "scripts/install.py", "scripts/uninstall.py", "README.md", "LICENSE", "CHANGELOG.md",
     "assets/icon.svg",

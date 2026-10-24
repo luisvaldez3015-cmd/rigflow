@@ -13,6 +13,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
   previous isolate membership, display and camera framing restore on leaving Match.
 - Definition corrections edit each model independently; reused joints move between
   roles, wrong-model selections warn, and validation gates Transfer.
+- Match definition art now renders the shipped Maya-joint silhouettes from
+  `assets/definition/layout.json`; the compact toolbar leaves more room for the
+  body and hands maps at the minimum window size.
 
 ### Added
 - Setup has checkmarked detection slots and two always-visible process cards

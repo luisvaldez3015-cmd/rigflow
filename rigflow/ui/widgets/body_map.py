@@ -1,33 +1,60 @@
-"""Painted character-definition body and hands; all coordinates are logical units."""
+"""HumanIK-style definition map rendered from the checked-in art layout.
+
+The SVGs contain only the mannequin silhouettes. Coordinates, bones, labels,
+colours and state sizes live in ``assets/definition/layout.json`` so the art
+can be regenerated without a second coordinate table in Python.
+"""
+from __future__ import annotations
+
+import json
+import math
+from pathlib import Path
+
 from rigflow.skeleton.roles import REQUIRED_ROLES, display_name
-from rigflow.ui import theme
-from rigflow.ui.qt import QtCore, QtGui, QtWidgets, Signal
+from rigflow.ui.qt import QtCore, QtGui, QtWidgets, Signal, QtSvg
 
 
-BODY_SLOTS = {"Head": (400, 44), "Neck": (400, 86), "Spine3": (400, 116),
-              "Spine2": (400, 143), "Spine1": (400, 170), "Spine": (400, 197), "Hips": (400, 231)}
-for _side, _sign in (("Left", 1), ("Right", -1)):
-    for _part, _x, _y in (("Shoulder", 38, 107), ("Arm", 88, 117), ("ForeArm", 163, 155),
-                         ("Hand", 233, 191), ("UpLeg", 41, 249), ("Leg", 48, 310),
-                         ("Foot", 52, 370), ("ToeBase", 68, 395)):
-        BODY_SLOTS[_side + _part] = (400 + _sign * _x * 1.35, _y)
+_DEFINITION_DIR = Path(__file__).resolve().parents[3] / "assets" / "definition"
+
+
+def _load_layout():
+    with open(_DEFINITION_DIR / "layout.json", "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+_LAYOUT = _load_layout()
+
+
+def _positions(view):
+    return {role: (item["x"], item["y"]) for role, item in _LAYOUT[view]["joints"].items()}
+
+
+# Public compatibility aliases; the coordinates themselves remain in layout.json.
+BODY_SLOTS = _positions("body")
 
 
 def hand_slots():
-    slots = {}
-    for side, center, sign in (("Right", 205, -1), ("Left", 595, 1)):
-        slots[side + "Hand"] = (center, 348)
-        for finger, dx, tip in (("Thumb", -120, 222), ("Index", -62, 105),
-                                ("Middle", -15, 78), ("Ring", 32, 103), ("Pinky", 79, 149)):
-            for index in range(1, 4):
-                x = center + sign * (dx * (.65 + index * .35 / 3))
-                y = 285 + (tip - 285) * index / 3
-                slots[side + "Hand" + finger + str(index)] = (x, y)
-    return slots
+    return _positions("hands")
+
+
+def _qcolor(value, alpha=1.0):
+    colour = QtGui.QColor(value)
+    colour.setAlphaF(alpha)
+    return colour
+
+
+def _font(style, size, weight=QtGui.QFont.Normal, spacing=0.0):
+    font = QtGui.QFont(style.get("family", "Segoe UI"))
+    font.setPixelSize(int(round(size)))
+    font.setWeight(weight)
+    if spacing:
+        font.setLetterSpacing(QtGui.QFont.AbsoluteSpacing, spacing)
+    return font
 
 
 class BodyMap(QtWidgets.QWidget):
-    """Clickable slots with a shared hit-test for painting, GUI checks and tests."""
+    """Clickable body/hand slots with the same geometry used for painting."""
+
     slot_clicked = Signal(str)
     slot_menu = Signal(str, object)
 
@@ -41,30 +68,55 @@ class BodyMap(QtWidgets.QWidget):
         self.setMinimumSize(500, 250)
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.setAccessibleName("Character definition body map")
+        self._renderers = {}
+        for view in ("body", "hands"):
+            svg_path = _DEFINITION_DIR / _LAYOUT[view]["svg"]
+            self._renderers[view] = QtSvg.QSvgRenderer(str(svg_path), self)
 
     @property
     def slots(self):
         return hand_slots() if self.hands else BODY_SLOTS
 
     def set_hands(self, enabled):
-        self.hands = enabled
-        self.hovered = None
-        self.update()
+        enabled = bool(enabled)
+        if self.hands != enabled:
+            self.hands = enabled
+            self.hovered = None
+            self.update()
+
+    def _view_name(self):
+        return "hands" if self.hands else "body"
 
     def _transform(self):
-        scale = min(self.width() / 800.0, self.height() / 420.0)
-        return scale, (self.width() - 800 * scale) / 2, (self.height() - 420 * scale) / 2
+        width, height = _LAYOUT["viewBox"][2], _LAYOUT["viewBox"][3]
+        scale = min(self.width() / float(width), self.height() / float(height))
+        return scale, (self.width() - width * scale) / 2.0, (self.height() - height * scale) / 2.0
+
+    def _screen_point(self, role):
+        scale, ox, oy = self._transform()
+        item = _LAYOUT[self._view_name()]["joints"][role]
+        return QtCore.QPointF(ox + item["x"] * scale, oy + item["y"] * scale)
+
+    def _radius(self, role, scale=None):
+        view = self._view_name()
+        scale = self._transform()[0] if scale is None else scale
+        item = _LAYOUT[view]["joints"][role]
+        minima = _LAYOUT["style"]["jointMinRadiusPx"][view]
+        return max(float(minima["required" if item.get("required") else "optional"]), item["r"] * scale)
 
     def slot_position(self, role):
-        scale, x, y = self._transform()
-        px, py = self.slots[role]
-        return QtCore.QPoint(round(x + px * scale), round(y + py * scale))
+        point = self._screen_point(role)
+        return QtCore.QPoint(round(point.x()), round(point.y()))
 
     def role_at(self, position):
+        point = QtCore.QPointF(position)
+        scale = self._transform()[0]
         for role in self.slots:
-            point = self.slot_position(role)
-            if (point.x() - position.x()) ** 2 + (point.y() - position.y()) ** 2 <= 14 ** 2:
+            centre = self._screen_point(role)
+            hit = max(self._radius(role, scale) + 4.0, 10.0)
+            if (centre.x() - point.x()) ** 2 + (centre.y() - point.y()) ** 2 <= hit * hit:
                 return role
+        return None
 
     def mousePressEvent(self, event):
         role = self.role_at(event.pos())
@@ -73,102 +125,196 @@ class BodyMap(QtWidgets.QWidget):
                 self.slot_menu.emit(role, event.globalPos())
             elif event.button() == QtCore.Qt.LeftButton:
                 self.slot_clicked.emit(role)
+        event.accept()
 
     def mouseMoveEvent(self, event):
         role = self.role_at(event.pos())
         if role != self.hovered:
             self.hovered = role
             self.setCursor(QtCore.Qt.PointingHandCursor if role else QtCore.Qt.ArrowCursor)
-            self.setToolTip((display_name(role) + (" · Required" if role in REQUIRED_ROLES else " · Optional") +
-                             "\n" + (self.joints.get(role) or "Click, then select a joint in Maya")) if role else "")
+            if role:
+                required = _LAYOUT[self._view_name()]["joints"][role].get("required", False)
+                status = "Required" if required or role in REQUIRED_ROLES else "Optional"
+                self.setToolTip("{} · {}\n{}".format(
+                    display_name(role), status,
+                    self.joints.get(role) or "Click, then select a joint in Maya"))
+            else:
+                self.setToolTip("")
             self.update()
+        event.accept()
 
     def leaveEvent(self, event):
         self.hovered = None
         self.update()
         super().leaveEvent(event)
 
-    def _line(self, painter, points, color, width):
-        painter.setPen(QtGui.QPen(QtGui.QColor(color), width, QtCore.Qt.SolidLine, QtCore.Qt.RoundCap, QtCore.Qt.RoundJoin))
-        painter.drawPolyline(QtGui.QPolygonF([QtCore.QPointF(*p) for p in points]))
-
-    def paintEvent(self, event):
-        painter = QtGui.QPainter(self)
-        painter.setRenderHint(QtGui.QPainter.Antialiasing)
-        scale, x, y = self._transform()
-        painter.translate(x, y)
-        painter.scale(scale, scale)
-        painter.setPen(QtGui.QPen(QtGui.QColor(theme.BORDER_LIGHT), 1))
-        painter.setBrush(QtGui.QColor("#383d40"))
-        if not self.hands:
-            # A quiet silhouette gives each slot an anatomical landmark.
-            path = QtGui.QPainterPath()
-            path.addRoundedRect(QtCore.QRectF(374, 18, 52, 55), 23, 23)
-            painter.drawPath(path)
-            self._line(painter, [(400, 72), (400, 100)], "#4b5357", 22)
-            torso = QtGui.QPolygonF([QtCore.QPointF(*p) for p in
-                [(352, 99), (448, 99), (438, 166), (430, 218), (442, 247),
-                 (400, 263), (358, 247), (370, 218), (362, 166)]])
-            painter.setPen(QtGui.QPen(QtGui.QColor("#515a5f"), 1))
-            painter.drawPolygon(torso)
-            for side in ("Left", "Right"):
-                points = [BODY_SLOTS[side + part] for part in ("Shoulder", "Arm", "ForeArm", "Hand")]
-                self._line(painter, points, "#515a5f", 25)
-                self._line(painter, points, "#383d40", 22)
-                points = [BODY_SLOTS[side + part] for part in ("UpLeg", "Leg", "Foot", "ToeBase")]
-                self._line(painter, points, "#515a5f", 30)
-                self._line(painter, points, "#383d40", 27)
-            self._line(painter, [(400, 90), (400, 231)], "#66747a", 2)
-        else:
-            for side, center in (("Right", 205), ("Left", 595)):
-                painter.setPen(QtGui.QPen(QtGui.QColor("#515a5f"), 1))
-                painter.setBrush(QtGui.QColor("#383d40"))
-                painter.drawRoundedRect(QtCore.QRectF(center - 65, 247, 130, 100), 34, 34)
-                self._line(painter, [(center, 327), (center, 361)], "#515a5f", 44)
-                for finger in ("Thumb", "Index", "Middle", "Ring", "Pinky"):
-                    points = [self.slots[side + "Hand" + finger + str(i)] for i in range(1, 4)]
-                    self._line(painter, points, "#515a5f", 25)
-                    self._line(painter, points, "#383d40", 22)
-                    px, py = points[-1]
-                    self._text(painter, px - 35, py - 36, 70, 20, finger, theme.MUTED)
-                self._text(painter, center - 100, 382, 200, 22, side + " hand", theme.MUTED)
-        for role, (px, py) in self.slots.items():
-            required = role in REQUIRED_ROLES
-            state = "waiting" if role == self.waiting else self.states.get(role, "required" if required else "empty")
-            color = {"waiting": theme.ACCENT, "assigned": theme.GREEN, "review": theme.YELLOW,
-                     "invalid": theme.RED, "required": theme.RED, "empty": "#839097"}[state]
-            radius = 9 if required else (8 if self.hands else 6)
-            if role == self.hovered or state == "waiting":
-                painter.setPen(QtGui.QPen(QtGui.QColor(color), 1))
-                painter.setBrush(QtGui.QColor("#344951"))
-                painter.drawEllipse(QtCore.QPointF(px, py), radius + 5, radius + 5)
-            painter.setPen(QtGui.QPen(QtGui.QColor(color), 2 if required else 1.5))
-            painter.setBrush(QtGui.QColor(color if state in ("assigned", "review", "waiting", "invalid") else "#2d3235"))
-            painter.drawEllipse(QtCore.QPointF(px, py), radius, radius)
-            if self.hands and role[-1:].isdigit():
-                self._text(painter, px - 8, py - 9, 16, 18, role[-1], "#1c292c" if state == "assigned" else theme.TEXT, 9)
-            elif not self.hands:
-                if role in ("Head", "Neck", "Spine3", "Spine2", "Spine1", "Spine", "Hips"):
-                    self._text(painter, px + 20, py - 10, 110, 20, role, theme.TEXT if required else theme.MUTED, align=QtCore.Qt.AlignLeft)
-                else:
-                    label = role.replace("Left", "").replace("Right", "")
-                    # Arm labels sit above; leg labels sit outside the silhouette.
-                    upper = any(part in role for part in ("Shoulder", "Arm", "Hand"))
-                    lx = px - 55 if upper else px + (18 if role.startswith("Left") else -128)
-                    ly = py - (29 if upper else 10)
-                    if "Shoulder" in role:
-                        lx = 400 + (95 if role.startswith("Left") else -205)
-                        ly = 66
-                    self._text(painter, lx, ly, 110, 20, label, theme.TEXT if required else theme.MUTED)
-        if not self.hands:
-            self._text(painter, 120, 15, 170, 20, "RIGHT", theme.MUTED, 10)
-            self._text(painter, 510, 15, 170, 20, "LEFT", theme.MUTED, 10)
-        painter.end()
+    @staticmethod
+    def _bone_polys(parent, child, parent_radius, child_radius):
+        dx, dy = child.x() - parent.x(), child.y() - parent.y()
+        distance = math.hypot(dx, dy)
+        if distance < 1e-6:
+            return None
+        ux, uy = dx / distance, dy / distance
+        nx, ny = -uy, ux
+        a = min(parent_radius * 1.25, distance * 0.3)
+        half_width = parent_radius * 0.62
+        w1 = QtCore.QPointF(parent.x() + ux * a + nx * half_width,
+                            parent.y() + uy * a + ny * half_width)
+        w2 = QtCore.QPointF(parent.x() + ux * a - nx * half_width,
+                            parent.y() + uy * a - ny * half_width)
+        tip = QtCore.QPointF(child.x() - ux * (child_radius + 1.5),
+                             child.y() - uy * (child_radius + 1.5))
+        light_first = nx * -0.6 + ny * -0.8 > 0
+        first, second = [parent, w1, tip], [parent, tip, w2]
+        facets = (first, second) if light_first else (second, first)
+        return facets, [parent, w1, tip, w2]
 
     @staticmethod
-    def _text(painter, x, y, width, height, text, color, size=11, align=QtCore.Qt.AlignCenter):
-        painter.setPen(QtGui.QColor(color))
-        font = QtGui.QFont("Segoe UI")
-        font.setPixelSize(round(size / min(1.0, painter.transform().m11())))
-        painter.setFont(font)
-        painter.drawText(QtCore.QRectF(x, y, width, height), align | QtCore.Qt.AlignVCenter, text)
+    def _polygon(points):
+        return QtGui.QPolygonF(points)
+
+    def _state(self, role):
+        view = _LAYOUT[self._view_name()]
+        if role == self.waiting:
+            return "waiting"
+        return self.states.get(role, "required" if view["joints"][role].get("required") else "empty")
+
+    def _bone_kind(self, parent, child):
+        states = (self._state(parent), self._state(child))
+        if all(state == "assigned" for state in states):
+            return "assigned"
+        if all(state in ("assigned", "review") for state in states) and "review" in states:
+            return "review"
+        return "neutral"
+
+    def _draw_bone(self, painter, parent, child, parent_radius, child_radius, kind):
+        result = self._bone_polys(parent, child, parent_radius, child_radius)
+        if not result:
+            return
+        polygons, outline = result
+        colours = _LAYOUT["style"]["bone"][kind]
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.setBrush(_qcolor(colours["lit"]))
+        painter.drawPolygon(self._polygon(polygons[0]))
+        painter.setBrush(_qcolor(colours["shaded"]))
+        painter.drawPolygon(self._polygon(polygons[1]))
+        painter.setBrush(QtCore.Qt.NoBrush)
+        painter.setPen(QtGui.QPen(_qcolor(_LAYOUT["style"]["boneEdge"], 0.9), 0.9,
+                                  QtCore.Qt.SolidLine, QtCore.Qt.RoundCap, QtCore.Qt.RoundJoin))
+        painter.drawPolygon(self._polygon(outline))
+
+    def _draw_joint(self, painter, role, centre, radius, state):
+        style = _LAYOUT["style"]["joint"][state]
+        x, y = centre.x(), centre.y()
+        if state == "waiting":
+            glow = QtGui.QRadialGradient(centre, radius + 9.0)
+            glow.setColorAt(radius / (radius + 9.0), _qcolor("#23b7db", 0.55))
+            glow.setColorAt(1.0, _qcolor("#23b7db", 0.0))
+            painter.setPen(QtCore.Qt.NoPen)
+            painter.setBrush(glow)
+            painter.drawEllipse(centre, radius + 9.0, radius + 9.0)
+            painter.setBrush(QtCore.Qt.NoBrush)
+            painter.setPen(QtGui.QPen(_qcolor("#4cc8e6", 0.95), 1.3))
+            painter.drawEllipse(centre, radius + 4.0, radius + 4.0)
+        draw_radius = radius * 1.12 if role == self.hovered else radius
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.setBrush(_qcolor("#16191b", 0.55))
+        painter.drawEllipse(QtCore.QPointF(x, y + 0.8), draw_radius + 1.6, draw_radius + 1.6)
+        gradient = QtGui.QRadialGradient(QtCore.QPointF(x, y), draw_radius,
+                                         QtCore.QPointF(x - draw_radius * 0.38,
+                                                        y - draw_radius * 0.42))
+        gradient.setColorAt(0.0, _qcolor(style["highlight"]))
+        gradient.setColorAt(0.55, _qcolor(style["base"]))
+        gradient.setColorAt(1.0, _qcolor(style["shadow"]))
+        painter.setBrush(gradient)
+        painter.setPen(QtGui.QPen(_qcolor(style["ring"]), style["ringWidthPx"]))
+        painter.drawEllipse(centre, draw_radius, draw_radius)
+        if draw_radius >= 5.5 and state != "required":
+            painter.setBrush(QtCore.Qt.NoBrush)
+            painter.setPen(QtGui.QPen(_qcolor("#ffffff", 0.16), 0.9))
+            painter.drawEllipse(centre, draw_radius * 0.9, draw_radius * 0.3)
+        if state == "required":
+            painter.setPen(QtCore.Qt.NoPen)
+            painter.setBrush(_qcolor("#d9534f", 0.9))
+            painter.drawEllipse(centre, draw_radius * 0.28, draw_radius * 0.28)
+        if role == self.hovered:
+            painter.setBrush(QtCore.Qt.NoBrush)
+            painter.setPen(QtGui.QPen(_qcolor("#ffffff", 0.85), 1.3))
+            painter.drawEllipse(centre, draw_radius + 3.2, draw_radius + 3.2)
+        if self.hands and role[-1:].isdigit() and draw_radius >= 7.5:
+            font = _font(_LAYOUT["style"]["label"], max(8, int(draw_radius * 1.05)), QtGui.QFont.DemiBold)
+            painter.setFont(font)
+            dark_text = state in ("assigned", "review", "waiting", "invalid")
+            painter.setPen(_qcolor("#14251a" if dark_text else "#dfe5e8", 0.85 if dark_text else 0.8))
+            painter.drawText(QtCore.QRectF(x - draw_radius, y - draw_radius,
+                                           2 * draw_radius, 2 * draw_radius),
+                             QtCore.Qt.AlignCenter, role[-1])
+
+    @staticmethod
+    def _label_rect(font_metrics, anchor, x, y):
+        width = font_metrics.horizontalAdvance(anchor["text"])
+        height = font_metrics.height()
+        align = anchor.get("align", "center")
+        left = x if align == "left" else x - width if align == "right" else x - width / 2.0
+        return QtCore.QRectF(left, y - height / 2.0, width, height)
+
+    def _draw_labels(self, painter, scale, ox, oy):
+        view = _LAYOUT[self._view_name()]
+        label_style = _LAYOUT["style"]["label"]
+        for role, anchor_data in view.get("labels", {}).items():
+            if scale < anchor_data.get("minScale", 0):
+                continue
+            anchor = anchor_data
+            compact = anchor_data.get("compact")
+            if compact and scale < compact.get("below", 0):
+                anchor = dict(compact, text=anchor_data["text"])
+            required = self.hands or view["joints"].get(role, {}).get("required", False) or role in REQUIRED_ROLES
+            size = label_style["requiredPx"] if required else label_style["optionalPx"]
+            font = _font(label_style, size)
+            painter.setFont(font)
+            metrics = QtGui.QFontMetricsF(font)
+            x, y = ox + anchor["x"] * scale, oy + anchor["y"] * scale
+            rect = self._label_rect(metrics, anchor, x, y)
+            state = self._state(role) if role in view["joints"] else None
+            colour = label_style["required"] if required else label_style["optional"]
+            if state == "required":
+                colour = label_style["requiredEmpty"]
+            elif state == "waiting":
+                colour = label_style["waiting"]
+            painter.setPen(_qcolor(colour))
+            painter.drawText(rect, QtCore.Qt.AlignCenter, anchor["text"])
+        heading_style = _LAYOUT["style"]["label"]
+        heading_font = _font(heading_style, heading_style.get("headingPx", 10),
+                             QtGui.QFont.DemiBold, heading_style.get("headingLetterSpacingPx", 0))
+        painter.setFont(heading_font)
+        painter.setPen(_qcolor(heading_style["heading"]))
+        metrics = QtGui.QFontMetricsF(heading_font)
+        for heading in view.get("headings", []):
+            x, y = ox + heading["x"] * scale, oy + heading["y"] * scale
+            painter.drawText(self._label_rect(metrics, dict(heading, text=heading["text"]), x, y),
+                             QtCore.Qt.AlignCenter, heading["text"])
+
+    def paintEvent(self, event):
+        del event
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        painter.setRenderHint(QtGui.QPainter.TextAntialiasing)
+        painter.setRenderHint(QtGui.QPainter.SmoothPixmapTransform)
+        view_name = self._view_name()
+        view = _LAYOUT[view_name]
+        scale, ox, oy = self._transform()
+        target = QtCore.QRectF(ox, oy, _LAYOUT["viewBox"][2] * scale, _LAYOUT["viewBox"][3] * scale)
+        self._renderers[view_name].render(painter, target)
+        centres = {role: self._screen_point(role) for role in view["joints"]}
+        radii = {role: self._radius(role, scale) for role in view["joints"]}
+        for parent, child in view.get("bones", []):
+            self._draw_bone(painter, centres[parent], centres[child], radii[parent], radii[child],
+                            self._bone_kind(parent, child))
+        waiting = self.waiting
+        for role in view["joints"]:
+            if role != waiting:
+                self._draw_joint(painter, role, centres[role], radii[role], self._state(role))
+        if waiting in centres:
+            self._draw_joint(painter, waiting, centres[waiting], radii[waiting], "waiting")
+        self._draw_labels(painter, scale, ox, oy)
+        painter.end()

@@ -320,6 +320,9 @@ UI (`rigflow/ui`):
   definitions, presented as Model A/B in the default transfer direction.
   `BodyMap` paints Body and Hands (five fingers × three phalanges); slots expose
   `slot_position(role)` and `role_at(point)` for the same hit-testing used by tests.
+  The silhouettes and all map geometry/style data ship in `assets/definition/`;
+  `scripts/definition_art/` is the reproducible source for those assets and
+  writes reference mockups to a temporary output directory.
 - `JointMapping.set_definition(role, side, joint)` edits one side and moves any
   reused joint out of other roles on that side. `manual_sides` tracks which sides
   of each `manual` pair are locked. `build_mapping` preserves those overrides

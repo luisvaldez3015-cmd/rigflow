@@ -81,6 +81,8 @@ rig transfer and returns to Setup.
 Choose **Model A** or **Model B** and define its joints on the **Body** or
 **Hands** map. The counters show the 15 required HumanIK roles per model;
 smaller slots (extra spines, shoulders, neck, toes and fingers) are optional.
+The compact toolbar keeps model selection, detection, presets and display mode
+in one row so the definition figure has the available space at smaller windows.
 The main Maya viewport isolates and frames that model with joint X-ray on.
 Use **Bones / Mesh / Both** to change its display. Leaving Match restores the
 previous viewport isolation, display flags and camera framing.

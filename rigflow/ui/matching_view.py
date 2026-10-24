@@ -28,8 +28,8 @@ class MatchingView(QtWidgets.QWidget):
         layout.setContentsMargins(24, 4, 24, 16)
         layout.setSpacing(10)
         top = QtWidgets.QHBoxLayout()
+        top.setSpacing(6)
         top.addWidget(theme.label("Character definition", heading=True))
-        top.addStretch()
         self.model_buttons = {}
         self.model_group = QtWidgets.QButtonGroup(self)
         for side in ("source", "destination"):
@@ -38,13 +38,10 @@ class MatchingView(QtWidgets.QWidget):
             self.model_group.addButton(button)
             self.model_buttons[side] = button
             top.addWidget(button)
-        layout.addLayout(top)
-        layout.addWidget(theme.label("Click a slot, then select its joint in Maya. Right-click to clear. Esc cancels.", muted=True))
-        toolbar = QtWidgets.QHBoxLayout()
         self.auto_button = theme.button("Auto-detect", "Detect joints; keep manual definitions.", self.auto_detect)
         self.clear_button = theme.button("Clear all", "Clear the active model's definition.", self.clear_all)
-        toolbar.addWidget(self.auto_button)
-        toolbar.addWidget(self.clear_button)
+        top.addWidget(self.auto_button)
+        top.addWidget(self.clear_button)
         self.menu_button = theme.button("…", "Mapping presets")
         self.menu_button.setFixedWidth(48)
         self.menu_button.setStyleSheet("QPushButton::menu-indicator { image: none; width: 0; }")
@@ -52,8 +49,8 @@ class MatchingView(QtWidgets.QWidget):
         self.preset_menu.addAction("Load preset…", self.load_preset)
         self.preset_menu.addAction("Save preset…", self.save_preset)
         self.menu_button.setMenu(self.preset_menu)
-        toolbar.addWidget(self.menu_button)
-        toolbar.addStretch()
+        top.addWidget(self.menu_button)
+        top.addStretch()
         self.display_buttons = {}
         self.display_group = QtWidgets.QButtonGroup(self)
         self.display = "Both"
@@ -62,9 +59,9 @@ class MatchingView(QtWidgets.QWidget):
             button.setCheckable(True)
             self.display_group.addButton(button)
             self.display_buttons[display] = button
-            toolbar.addWidget(button)
+            top.addWidget(button)
         self.display_buttons["Both"].setChecked(True)
-        layout.addLayout(toolbar)
+        layout.addLayout(top)
         card = QtWidgets.QFrame()
         card.setObjectName("sectionCard")
         card_layout = QtWidgets.QVBoxLayout(card)
@@ -85,6 +82,7 @@ class MatchingView(QtWidgets.QWidget):
         tabs.addWidget(legend)
         card_layout.addLayout(tabs)
         self.body_map = BodyMap()
+        card.setToolTip("Click a slot, then select its joint in Maya. Right-click to clear. Esc cancels.")
         self.body_map.slot_clicked.connect(self.click_slot)
         self.body_map.slot_menu.connect(self.slot_menu)
         card_layout.addWidget(self.body_map, 1)

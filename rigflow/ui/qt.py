@@ -4,11 +4,11 @@ from __future__ import annotations
 import os
 
 try:
-    from PySide6 import QtCore, QtGui, QtWidgets
+    from PySide6 import QtCore, QtGui, QtWidgets, QtSvg
     from shiboken6 import wrapInstance
     QT_BINDING = "PySide6"
 except ImportError:
-    from PySide2 import QtCore, QtGui, QtWidgets
+    from PySide2 import QtCore, QtGui, QtWidgets, QtSvg
     from shiboken2 import wrapInstance
     QT_BINDING = "PySide2"
 

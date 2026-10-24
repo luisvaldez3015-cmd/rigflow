@@ -362,6 +362,28 @@ class UISmokeTests(unittest.TestCase):
         self.assertEqual(body.joints["LeftHand"], "mixamorig:LeftHand")
         self.assertEqual(body.role_at(body.slot_position("LeftHand")), "LeftHand")
 
+    def test_definition_art_layout_hit_testing_and_offscreen_paint(self):
+        from rigflow.ui.widgets.body_map import BODY_SLOTS, BodyMap, hand_slots
+
+        body = BodyMap()
+        body.resize(800, 512)
+        body.states = {role: "assigned" for role in BODY_SLOTS}
+        body.show()
+        self.app.processEvents()
+        self.assertTrue(all(body.role_at(body.slot_position(role)) == role for role in BODY_SLOTS))
+        self.assertFalse(body.grab().isNull())
+        body.set_hands(True)
+        body.states = {role: "assigned" for role in hand_slots()}
+        self.app.processEvents()
+        self.assertTrue(all(body.role_at(body.slot_position(role)) == role for role in hand_slots()))
+        self.assertFalse(body.grab().isNull())
+        body.waiting = "LeftHandMiddle2"
+        body.states["LeftHandMiddle2"] = "waiting"
+        body.states["RightHand"] = "invalid"
+        body.states["LeftHandIndex3"] = "required"
+        self.assertFalse(body.grab().isNull())
+        body.close()
+
     def test_definition_slot_first_wrong_model_cancel_and_joint_first(self):
         from PySide2.QtTest import QTest
         clip = self.populated_clip()

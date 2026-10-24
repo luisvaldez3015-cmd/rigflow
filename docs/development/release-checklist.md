@@ -26,7 +26,7 @@ rigflow-<version>/
   rigflow/            (without __pycache__)
   scripts/install.py
   scripts/uninstall.py
-  assets/icons/
+  assets/icons/ and assets/definition/
   docs/
   README.md  LICENSE  CHANGELOG.md
 ```
@@ -35,7 +35,7 @@ Build it from a clean checkout:
 
 ```bash
 git archive --format=zip --prefix=rigflow-<version>/ -o rigflow-<version>.zip v<version> \
-  rigflow scripts/install.py scripts/uninstall.py assets/icons docs README.md LICENSE CHANGELOG.md
+  rigflow scripts/install.py scripts/uninstall.py assets/icons assets/definition docs README.md LICENSE CHANGELOG.md
 ```
 
 - [ ] Unzip the archive to a fresh folder on a machine (or user profile)

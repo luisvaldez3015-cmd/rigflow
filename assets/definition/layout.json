@@ -1,0 +1,933 @@
+{
+ "viewBox": [
+  0,
+  0,
+  1000,
+  640
+ ],
+ "style": {
+  "joint": {
+   "assigned": {
+    "highlight": "#a6e3ae",
+    "base": "#58b368",
+    "shadow": "#3b7f48",
+    "ring": "#2a5a33",
+    "ringWidthPx": 1.2
+   },
+   "review": {
+    "highlight": "#f6df9c",
+    "base": "#e0b84c",
+    "shadow": "#a88430",
+    "ring": "#6e5520",
+    "ringWidthPx": 1.2
+   },
+   "waiting": {
+    "highlight": "#8fe3f6",
+    "base": "#23b7db",
+    "shadow": "#16809c",
+    "ring": "#0f5d72",
+    "ringWidthPx": 1.2
+   },
+   "invalid": {
+    "highlight": "#f0a09d",
+    "base": "#d9534f",
+    "shadow": "#9c3431",
+    "ring": "#5e1f1d",
+    "ringWidthPx": 1.2
+   },
+   "required": {
+    "highlight": "#4a4446",
+    "base": "#332f30",
+    "shadow": "#262425",
+    "ring": "#d9534f",
+    "ringWidthPx": 1.8
+   },
+   "empty": {
+    "highlight": "#7a868c",
+    "base": "#4f5a60",
+    "shadow": "#3a4247",
+    "ring": "#8d999f",
+    "ringWidthPx": 1.0
+   }
+  },
+  "jointMinRadiusPx": {
+   "body": {
+    "required": 6.0,
+    "optional": 4.5
+   },
+   "hands": {
+    "required": 6.5,
+    "optional": 5.0
+   }
+  },
+  "bone": {
+   "neutral": {
+    "lit": "#5f6a70",
+    "shaded": "#4a5459"
+   },
+   "assigned": {
+    "lit": "#6cc27a",
+    "shaded": "#4a9a58"
+   },
+   "review": {
+    "lit": "#e6c464",
+    "shaded": "#b8933a"
+   }
+  },
+  "boneEdge": "#262b2e",
+  "label": {
+   "family": "Segoe UI",
+   "requiredPx": 11,
+   "optionalPx": 10,
+   "required": "#e6e6e6",
+   "optional": "#a0a0a0",
+   "requiredEmpty": "#e88a87",
+   "waiting": "#6fd3ec",
+   "headingPx": 10,
+   "headingWeight": 600,
+   "headingLetterSpacingPx": 1.6,
+   "heading": "#8a8a8a"
+  }
+ },
+ "body": {
+  "svg": "body.svg",
+  "joints": {
+   "Head": {
+    "x": 500,
+    "y": 74,
+    "r": 10,
+    "required": true
+   },
+   "Neck": {
+    "x": 500,
+    "y": 118,
+    "r": 7,
+    "required": false
+   },
+   "Spine3": {
+    "x": 500,
+    "y": 154,
+    "r": 7,
+    "required": false
+   },
+   "Spine2": {
+    "x": 500,
+    "y": 190,
+    "r": 7,
+    "required": false
+   },
+   "Spine1": {
+    "x": 500,
+    "y": 227,
+    "r": 7,
+    "required": false
+   },
+   "Spine": {
+    "x": 500,
+    "y": 263,
+    "r": 10,
+    "required": true
+   },
+   "Hips": {
+    "x": 500,
+    "y": 299,
+    "r": 10,
+    "required": true
+   },
+   "LeftShoulder": {
+    "x": 541.0,
+    "y": 136,
+    "r": 7,
+    "required": false
+   },
+   "LeftArm": {
+    "x": 584.0,
+    "y": 140,
+    "r": 10,
+    "required": true
+   },
+   "LeftForeArm": {
+    "x": 697.0,
+    "y": 142,
+    "r": 10,
+    "required": true
+   },
+   "LeftHand": {
+    "x": 791.0,
+    "y": 143,
+    "r": 10,
+    "required": true
+   },
+   "LeftUpLeg": {
+    "x": 545.0,
+    "y": 316,
+    "r": 10,
+    "required": true
+   },
+   "LeftLeg": {
+    "x": 549.0,
+    "y": 452,
+    "r": 10,
+    "required": true
+   },
+   "LeftFoot": {
+    "x": 553.0,
+    "y": 576,
+    "r": 10,
+    "required": true
+   },
+   "LeftToeBase": {
+    "x": 562.0,
+    "y": 612,
+    "r": 7,
+    "required": false
+   },
+   "RightShoulder": {
+    "x": 459.0,
+    "y": 136,
+    "r": 7,
+    "required": false
+   },
+   "RightArm": {
+    "x": 416.0,
+    "y": 140,
+    "r": 10,
+    "required": true
+   },
+   "RightForeArm": {
+    "x": 303.0,
+    "y": 142,
+    "r": 10,
+    "required": true
+   },
+   "RightHand": {
+    "x": 209.0,
+    "y": 143,
+    "r": 10,
+    "required": true
+   },
+   "RightUpLeg": {
+    "x": 455.0,
+    "y": 316,
+    "r": 10,
+    "required": true
+   },
+   "RightLeg": {
+    "x": 451.0,
+    "y": 452,
+    "r": 10,
+    "required": true
+   },
+   "RightFoot": {
+    "x": 447.0,
+    "y": 576,
+    "r": 10,
+    "required": true
+   },
+   "RightToeBase": {
+    "x": 438.0,
+    "y": 612,
+    "r": 7,
+    "required": false
+   }
+  },
+  "bones": [
+   [
+    "Hips",
+    "Spine"
+   ],
+   [
+    "Spine",
+    "Spine1"
+   ],
+   [
+    "Spine1",
+    "Spine2"
+   ],
+   [
+    "Spine2",
+    "Spine3"
+   ],
+   [
+    "Spine3",
+    "Neck"
+   ],
+   [
+    "Neck",
+    "Head"
+   ],
+   [
+    "Spine3",
+    "LeftShoulder"
+   ],
+   [
+    "LeftShoulder",
+    "LeftArm"
+   ],
+   [
+    "LeftArm",
+    "LeftForeArm"
+   ],
+   [
+    "LeftForeArm",
+    "LeftHand"
+   ],
+   [
+    "Hips",
+    "LeftUpLeg"
+   ],
+   [
+    "LeftUpLeg",
+    "LeftLeg"
+   ],
+   [
+    "LeftLeg",
+    "LeftFoot"
+   ],
+   [
+    "LeftFoot",
+    "LeftToeBase"
+   ],
+   [
+    "Spine3",
+    "RightShoulder"
+   ],
+   [
+    "RightShoulder",
+    "RightArm"
+   ],
+   [
+    "RightArm",
+    "RightForeArm"
+   ],
+   [
+    "RightForeArm",
+    "RightHand"
+   ],
+   [
+    "Hips",
+    "RightUpLeg"
+   ],
+   [
+    "RightUpLeg",
+    "RightLeg"
+   ],
+   [
+    "RightLeg",
+    "RightFoot"
+   ],
+   [
+    "RightFoot",
+    "RightToeBase"
+   ]
+  ],
+  "labels": {
+   "Head": {
+    "text": "Head",
+    "x": 541,
+    "y": 50,
+    "align": "left",
+    "minScale": 0
+   },
+   "Neck": {
+    "text": "Neck",
+    "x": 513,
+    "y": 119,
+    "align": "left",
+    "minScale": 0.9
+   },
+   "Spine3": {
+    "text": "Spine 3",
+    "x": 520,
+    "y": 161,
+    "align": "left",
+    "minScale": 0.61
+   },
+   "Spine2": {
+    "text": "Spine 2",
+    "x": 520,
+    "y": 190,
+    "align": "left",
+    "minScale": 0.61
+   },
+   "Spine1": {
+    "text": "Spine 1",
+    "x": 520,
+    "y": 227,
+    "align": "left",
+    "minScale": 0.71
+   },
+   "Spine": {
+    "text": "Spine",
+    "x": 522,
+    "y": 263,
+    "align": "left",
+    "minScale": 0,
+    "compact": {
+     "x": 578,
+     "y": 251,
+     "align": "left",
+     "below": 0.7
+    }
+   },
+   "Hips": {
+    "text": "Hips",
+    "x": 522,
+    "y": 285,
+    "align": "left",
+    "minScale": 0.47,
+    "compact": {
+     "x": 585,
+     "y": 283,
+     "align": "left",
+     "below": 0.7
+    }
+   },
+   "LeftShoulder": {
+    "text": "Shoulder",
+    "x": 529,
+    "y": 99.5,
+    "align": "left",
+    "minScale": 0.77
+   },
+   "RightShoulder": {
+    "text": "Shoulder",
+    "x": 471.0,
+    "y": 99.5,
+    "align": "right",
+    "minScale": 0.77
+   },
+   "LeftArm": {
+    "text": "Arm",
+    "x": 600,
+    "y": 104,
+    "align": "center",
+    "minScale": 0.46
+   },
+   "RightArm": {
+    "text": "Arm",
+    "x": 400.0,
+    "y": 104,
+    "align": "center",
+    "minScale": 0
+   },
+   "LeftForeArm": {
+    "text": "Forearm",
+    "x": 697,
+    "y": 109,
+    "align": "center",
+    "minScale": 0.47
+   },
+   "RightForeArm": {
+    "text": "Forearm",
+    "x": 303.0,
+    "y": 109,
+    "align": "center",
+    "minScale": 0.47
+   },
+   "LeftHand": {
+    "text": "Hand",
+    "x": 800,
+    "y": 110,
+    "align": "center",
+    "minScale": 0.47
+   },
+   "RightHand": {
+    "text": "Hand",
+    "x": 200.0,
+    "y": 110,
+    "align": "center",
+    "minScale": 0.47
+   },
+   "LeftUpLeg": {
+    "text": "Up Leg",
+    "x": 594,
+    "y": 316,
+    "align": "left",
+    "minScale": 0
+   },
+   "RightUpLeg": {
+    "text": "Up Leg",
+    "x": 406.0,
+    "y": 316,
+    "align": "right",
+    "minScale": 0
+   },
+   "LeftLeg": {
+    "text": "Leg",
+    "x": 584,
+    "y": 452,
+    "align": "left",
+    "minScale": 0
+   },
+   "RightLeg": {
+    "text": "Leg",
+    "x": 416.0,
+    "y": 452,
+    "align": "right",
+    "minScale": 0
+   },
+   "LeftFoot": {
+    "text": "Foot",
+    "x": 582,
+    "y": 576,
+    "align": "left",
+    "minScale": 0
+   },
+   "RightFoot": {
+    "text": "Foot",
+    "x": 418.0,
+    "y": 576,
+    "align": "right",
+    "minScale": 0
+   },
+   "LeftToeBase": {
+    "text": "Toe",
+    "x": 594,
+    "y": 612,
+    "align": "left",
+    "minScale": 0
+   },
+   "RightToeBase": {
+    "text": "Toe",
+    "x": 406.0,
+    "y": 612,
+    "align": "right",
+    "minScale": 0
+   }
+  },
+  "headings": [
+   {
+    "text": "RIGHT",
+    "x": 210,
+    "y": 52,
+    "align": "center"
+   },
+   {
+    "text": "LEFT",
+    "x": 790,
+    "y": 52,
+    "align": "center"
+   }
+  ]
+ },
+ "hands": {
+  "svg": "hands.svg",
+  "joints": {
+   "LeftHand": {
+    "x": 736.0,
+    "y": 570,
+    "r": 12,
+    "required": true
+   },
+   "LeftHandIndex1": {
+    "x": 661.0,
+    "y": 350,
+    "r": 8.5,
+    "required": false
+   },
+   "LeftHandIndex2": {
+    "x": 649.9,
+    "y": 244.6,
+    "r": 8.5,
+    "required": false
+   },
+   "LeftHandIndex3": {
+    "x": 642.9,
+    "y": 177.9,
+    "r": 8.5,
+    "required": false
+   },
+   "LeftHandMiddle1": {
+    "x": 719.0,
+    "y": 338,
+    "r": 8.5,
+    "required": false
+   },
+   "LeftHandMiddle2": {
+    "x": 718.0,
+    "y": 221.0,
+    "r": 8.5,
+    "required": false
+   },
+   "LeftHandMiddle3": {
+    "x": 717.3,
+    "y": 147.0,
+    "r": 8.5,
+    "required": false
+   },
+   "LeftHandRing1": {
+    "x": 775.0,
+    "y": 346,
+    "r": 8.5,
+    "required": false
+   },
+   "LeftHandRing2": {
+    "x": 785.4,
+    "y": 237.5,
+    "r": 8.5,
+    "required": false
+   },
+   "LeftHandRing3": {
+    "x": 792.0,
+    "y": 169.8,
+    "r": 8.5,
+    "required": false
+   },
+   "LeftHandPinky1": {
+    "x": 826.0,
+    "y": 370,
+    "r": 8.5,
+    "required": false
+   },
+   "LeftHandPinky2": {
+    "x": 845.3,
+    "y": 286.2,
+    "r": 8.5,
+    "required": false
+   },
+   "LeftHandPinky3": {
+    "x": 857.0,
+    "y": 235.5,
+    "r": 8.5,
+    "required": false
+   },
+   "LeftHandThumb1": {
+    "x": 676.0,
+    "y": 514,
+    "r": 8.5,
+    "required": false
+   },
+   "LeftHandThumb2": {
+    "x": 624.0,
+    "y": 448,
+    "r": 8.5,
+    "required": false
+   },
+   "LeftHandThumb3": {
+    "x": 587.0,
+    "y": 395,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHand": {
+    "x": 264.0,
+    "y": 570,
+    "r": 12,
+    "required": true
+   },
+   "RightHandIndex1": {
+    "x": 339.0,
+    "y": 350,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHandIndex2": {
+    "x": 350.1,
+    "y": 244.6,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHandIndex3": {
+    "x": 357.1,
+    "y": 177.9,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHandMiddle1": {
+    "x": 281.0,
+    "y": 338,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHandMiddle2": {
+    "x": 282.0,
+    "y": 221.0,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHandMiddle3": {
+    "x": 282.7,
+    "y": 147.0,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHandRing1": {
+    "x": 225.0,
+    "y": 346,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHandRing2": {
+    "x": 214.6,
+    "y": 237.5,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHandRing3": {
+    "x": 208.0,
+    "y": 169.8,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHandPinky1": {
+    "x": 174.0,
+    "y": 370,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHandPinky2": {
+    "x": 154.7,
+    "y": 286.2,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHandPinky3": {
+    "x": 143.0,
+    "y": 235.5,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHandThumb1": {
+    "x": 324.0,
+    "y": 514,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHandThumb2": {
+    "x": 376.0,
+    "y": 448,
+    "r": 8.5,
+    "required": false
+   },
+   "RightHandThumb3": {
+    "x": 413.0,
+    "y": 395,
+    "r": 8.5,
+    "required": false
+   }
+  },
+  "bones": [
+   [
+    "LeftHand",
+    "LeftHandThumb1"
+   ],
+   [
+    "LeftHandThumb1",
+    "LeftHandThumb2"
+   ],
+   [
+    "LeftHandThumb2",
+    "LeftHandThumb3"
+   ],
+   [
+    "LeftHand",
+    "LeftHandIndex1"
+   ],
+   [
+    "LeftHandIndex1",
+    "LeftHandIndex2"
+   ],
+   [
+    "LeftHandIndex2",
+    "LeftHandIndex3"
+   ],
+   [
+    "LeftHand",
+    "LeftHandMiddle1"
+   ],
+   [
+    "LeftHandMiddle1",
+    "LeftHandMiddle2"
+   ],
+   [
+    "LeftHandMiddle2",
+    "LeftHandMiddle3"
+   ],
+   [
+    "LeftHand",
+    "LeftHandRing1"
+   ],
+   [
+    "LeftHandRing1",
+    "LeftHandRing2"
+   ],
+   [
+    "LeftHandRing2",
+    "LeftHandRing3"
+   ],
+   [
+    "LeftHand",
+    "LeftHandPinky1"
+   ],
+   [
+    "LeftHandPinky1",
+    "LeftHandPinky2"
+   ],
+   [
+    "LeftHandPinky2",
+    "LeftHandPinky3"
+   ],
+   [
+    "RightHand",
+    "RightHandThumb1"
+   ],
+   [
+    "RightHandThumb1",
+    "RightHandThumb2"
+   ],
+   [
+    "RightHandThumb2",
+    "RightHandThumb3"
+   ],
+   [
+    "RightHand",
+    "RightHandIndex1"
+   ],
+   [
+    "RightHandIndex1",
+    "RightHandIndex2"
+   ],
+   [
+    "RightHandIndex2",
+    "RightHandIndex3"
+   ],
+   [
+    "RightHand",
+    "RightHandMiddle1"
+   ],
+   [
+    "RightHandMiddle1",
+    "RightHandMiddle2"
+   ],
+   [
+    "RightHandMiddle2",
+    "RightHandMiddle3"
+   ],
+   [
+    "RightHand",
+    "RightHandRing1"
+   ],
+   [
+    "RightHandRing1",
+    "RightHandRing2"
+   ],
+   [
+    "RightHandRing2",
+    "RightHandRing3"
+   ],
+   [
+    "RightHand",
+    "RightHandPinky1"
+   ],
+   [
+    "RightHandPinky1",
+    "RightHandPinky2"
+   ],
+   [
+    "RightHandPinky2",
+    "RightHandPinky3"
+   ]
+  ],
+  "labels": {
+   "LeftHandThumb": {
+    "text": "Thumb",
+    "x": 564.4,
+    "y": 322.3,
+    "align": "center",
+    "minScale": 0
+   },
+   "LeftHandIndex": {
+    "text": "Index",
+    "x": 635.1,
+    "y": 103.4,
+    "align": "center",
+    "minScale": 0
+   },
+   "LeftHandMiddle": {
+    "text": "Middle",
+    "x": 716.6,
+    "y": 67.0,
+    "align": "center",
+    "minScale": 0
+   },
+   "LeftHandRing": {
+    "text": "Ring",
+    "x": 799.3,
+    "y": 93.2,
+    "align": "center",
+    "minScale": 0
+   },
+   "LeftHandPinky": {
+    "text": "Pinky",
+    "x": 872.1,
+    "y": 170.3,
+    "align": "center",
+    "minScale": 0
+   },
+   "LeftHand": {
+    "text": "Wrist",
+    "x": 736.0,
+    "y": 604,
+    "align": "center",
+    "minScale": 0
+   },
+   "RightHandThumb": {
+    "text": "Thumb",
+    "x": 435.6,
+    "y": 322.3,
+    "align": "center",
+    "minScale": 0
+   },
+   "RightHandIndex": {
+    "text": "Index",
+    "x": 364.9,
+    "y": 103.4,
+    "align": "center",
+    "minScale": 0
+   },
+   "RightHandMiddle": {
+    "text": "Middle",
+    "x": 283.4,
+    "y": 67.0,
+    "align": "center",
+    "minScale": 0
+   },
+   "RightHandRing": {
+    "text": "Ring",
+    "x": 200.7,
+    "y": 93.2,
+    "align": "center",
+    "minScale": 0
+   },
+   "RightHandPinky": {
+    "text": "Pinky",
+    "x": 127.9,
+    "y": 170.3,
+    "align": "center",
+    "minScale": 0
+   },
+   "RightHand": {
+    "text": "Wrist",
+    "x": 264.0,
+    "y": 604,
+    "align": "center",
+    "minScale": 0
+   }
+  },
+  "headings": [
+   {
+    "text": "RIGHT HAND",
+    "x": 40,
+    "y": 36,
+    "align": "left"
+   },
+   {
+    "text": "LEFT HAND",
+    "x": 960,
+    "y": 36,
+    "align": "right"
+   }
+  ]
+ }
+}
