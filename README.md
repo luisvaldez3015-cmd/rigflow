@@ -12,7 +12,7 @@
 > **Status: alpha, under active development.** Model detection, skeleton
 > analysis, joint matching, FBX/OBJ/Maya import, rig fitting and binding, the
 > HumanIK and matrix retargeting backends and the PySide interface are
-> implemented and covered by 96 unit tests and 61 Maya integration tests
+> implemented and covered by 107 unit tests and 76 Maya integration tests
 > (Maya 2023 and 2024), plus an end-to-end check inside Maya's UI. No public
 > release has been cut yet. See `CHANGELOG.md`.
 
@@ -25,7 +25,7 @@
 Real captures from Maya 2024 with the demo scene. Setup shows Model A (Mixamo-
 style joints with a jump) and Model B (skinned mannequin) with the process
 RigFlow proposes; Rig shows the source skeleton fitted onto a mesh-only copy
-before binding; Match shows the two models side by side; Transfer shows the
+before binding; Match shows the character definition map; Transfer shows the
 live HumanIK preview at frame 24 before baking.
 
 ## What RigFlow does
@@ -38,8 +38,9 @@ live HumanIK preview at frame 24 before baking.
   model. Same-topology weights are exact, including shifted and scaled copies.
 - Labels both skeletons against a canonical humanoid template using joint
   names **and** hierarchy topology, with a confidence score for every joint.
-- Shows the proposed source-to-destination joint matches with green / yellow /
-  red statuses and lets you correct them by hand. Manual fixes survive recomputation.
+- Defines each character on a HumanIK-style body and hands map: click a slot,
+  select its joint in Maya, and keep manual fixes through Auto-detect. The main
+  viewport isolates the active model with joint X-ray and restores on exit.
 - Retargets body animation onto the destination skeleton with a live preview
   before anything is baked (HumanIK where available, matrix-based fallback otherwise).
 - Keeps the destination rig intact: facial, eye and jaw controls are never
@@ -60,7 +61,7 @@ live HumanIK preview at frame 24 before baking.
 | Maya | Python | Qt | Status |
 |------|--------|----|--------|
 | 2024 | 3.10 | PySide2 | Primary development target |
-| 2023 | 3.9 | PySide2 | Tested headless (`mayapy`) |
+| 2023 | 3.9 | PySide2 | Tested with `mayapy` and the Maya GUI |
 | 2025 / 2026 | 3.11 | PySide6 | Planned through the Qt shim, not yet verified |
 
 ## Installation
@@ -90,7 +91,7 @@ and the destination mesh using **+ → From scene…** or **Use Maya selection**
 selection, and each model card shows its detected Mesh / Rig / Anim slots.
 Add the second model and choose an available process. A similar mesh-only destination
 adds **Rig** (fit the source skeleton and copy its weights) before **Match** (source and
-destination viewports with Match / Unmatch) and **Transfer** (live preview
+destination character definitions) and **Transfer** (live preview
 and bake). **Swap direction** chooses the source when both are animated;
 **New anim** replaces the source while keeping the destination.
 

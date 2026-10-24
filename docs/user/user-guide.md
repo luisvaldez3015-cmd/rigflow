@@ -76,27 +76,33 @@ discards the current fit and fits a fresh copy; **Back** removes the unbound
 fit and returns to Setup. With an unanimated source, binding completes the
 rig transfer and returns to Setup.
 
-## Step 2 · Match ("New animation")
+## Step 2 · Match (Character definition)
 
-Two viewports show the source on the left and the destination on the right,
-titled with their model labels and names (for example **Model A · mixamorig**
-and **Model B · Nova**). Both show their skeletons; Maya's selection highlight marks
-the joints you click.
+Choose **Model A** or **Model B** and define its joints on the **Body** or
+**Hands** map. The counters show the 15 required HumanIK roles per model;
+smaller slots (extra spines, shoulders, neck, toes and fingers) are optional.
+The main Maya viewport isolates and frames that model with joint X-ray on.
+Use **Bones / Mesh / Both** to change its display. Leaving Match restores the
+previous viewport isolation, display flags and camera framing.
 
-- To correct a correspondence: click a source joint, click the matching
-  destination joint (the *Selection* readout shows both), press **Match**.
-  The pair becomes a manual match and the counters update.
-- **Unmatch** drops the pair of the selected joint (the role turns red if it
-  is required, gray if it is optional).
-- **Auto-match** recomputes everything automatically but keeps your manual
-  corrections.
-- **Details** expands the full table (status, role, A joint, B joint,
-  confidence, manual, exclude) with the two joint hierarchies, **Save / Load
-  preset…** and **Reset to automatic**.
+- Click an empty slot, then select its joint in Maya. Cyan means waiting;
+  **Esc** or clicking the same slot again cancels. Alternatively, select one
+  joint first and click its slot to assign it immediately.
+- Green means assigned; yellow asks you to review an automatic guess. A red
+  outline means a required slot is empty; solid red means an invalid definition.
+  Hover a slot for its role and joint. Click an assigned slot to select its
+  joint, or right-click for **Clear / Select in scene**. To replace it, clear
+  it first or select the replacement joint before clicking.
+- A joint used by another role moves to the new role. A joint belonging to
+  the other model produces a warning and is never assigned.
+- **Auto-detect** keeps manual assignments and individually cleared slots.
+  **Clear all** confirms, resets only the active model and lets Auto-detect
+  start that definition again. **…** contains **Load preset… / Save preset…**.
 
-The line under the viewports shows the validation result. **Transfer**
-is enabled as soon as there are no errors. See the Skeleton Matching Guide
-for how the automatic matching decides.
+The status line points to the next missing required role. **Transfer** is
+enabled when both models have all required roles and validation has no errors.
+Transfer still bakes onto the destination joints, using HumanIK where available.
+Model labels retain their Setup identity if you swap the transfer direction.
 
 ## Step 3 · Transfer
 
@@ -129,6 +135,6 @@ the destination when you add the next source animation.
 ## Tips
 
 - Several animations for the same pair of characters: save a mapping preset
-  from **Details** after the first one and load it for the next.
+  from **…** in Match after the first one and load it for the next.
 - **Help** gives you every guide, the repository, issue reporting and an
   *About* dialog whose environment details you can paste into bug reports.

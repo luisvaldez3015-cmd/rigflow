@@ -6,6 +6,14 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- HumanIK-style Match page with Body / Hands definition maps, per-model required
+  progress, slot-first and joint-first assignment, manual-preserving Auto-detect
+  and presets. Removed Details, joint trees and embedded Match viewports.
+- Main Maya viewport isolation with joint X-ray and Bones / Mesh / Both display;
+  previous isolate membership, display and camera framing restore on leaving Match.
+- Definition corrections edit each model independently; reused joints move between
+  roles, wrong-model selections warn, and validation gates Transfer.
+
 ### Added
 - Setup has checkmarked detection slots and two always-visible process cards
   with short Start Rig / Start Match buttons and explicit unavailable reasons.

@@ -6,8 +6,9 @@ Launch Maya with this script, for example from a shell::
       "python(\"exec(open('C:/path/to/rigflow/scripts/maya_gui_check.py').read())\")"
 
 The script builds the demo scene, opens the real RigFlow window (real
-controller, embedded viewports), walks the whole workflow — add models,
-start the plan, auto-map, live preview, review, bake — and
+controller, main viewport definitions and Rig/Transfer embedded viewports),
+walks the whole workflow — add models, define slots in both selection orders,
+verify isolation/X-ray/restoration, live preview, review, bake — and
 captures a screenshot at each step. It then verifies on the real scene that:
 
 * the destination joints received keys on the RigFlow animation layer,
@@ -141,6 +142,7 @@ def _pump(seconds=0.5):
 
 def run():
     from maya import cmds
+    REPORT["maya_version"] = cmds.about(version=True)
 
     import rigflow
     from rigflow.scene.demo import build_demo_scene
@@ -151,6 +153,12 @@ def run():
 
     window = rigflow.launch()
     controller = window.controller
+    import logging
+    class ServiceErrors(logging.Handler):
+        def emit(self, record):
+            REPORT.setdefault("service_errors", []).append(self.format(record))
+    service_errors = ServiceErrors(level=logging.ERROR)
+    logging.getLogger("rigflow.ui.controller").addHandler(service_errors)
     REPORT["status_log"] = []
     controller.session.subscribe(
         lambda event, payload: REPORT["status_log"].append(payload)
@@ -169,6 +177,12 @@ def run():
     REPORT["checks"]["animation_plan"] = controller.session.plan.kind == "animation"
     REPORT["checks"]["animation_source_a"] = bool(model_a and controller.session.source is model_a)
     _grab(window, "03_setup_plan")
+    from rigflow.scene.viewport import main_model_panel
+    original_panel = main_model_panel()
+    cmds.modelEditor(original_panel, edit=True, joints=False, polymeshes=True, jointXray=False)
+    cmds.select(demo.destination_mesh, replace=True)
+    cmds.isolateSelect(original_panel, state=True)
+    cmds.isolateSelect(original_panel, addSelected=True)
     window.start_plan()
     REPORT["checks"]["start_opens_match"] = window.stack.currentWidget() is window.match_view
     _pump(0.3)
@@ -182,16 +196,81 @@ def run():
     REPORT["checks"]["mapping_ok"] = report.ok
     REPORT["checks"]["mapping_summary"] = clip.mapping.summary() if clip.mapping else {}
     _pump(1.0)
+    from PySide2.QtTest import QTest
+    from rigflow.ui.qt import QtCore
+    from rigflow.scene.viewport import DefinitionViewport
+    view = window.match_view
+    lease = controller._definition_viewport
+    if lease is None:
+        raise RuntimeError("Match did not capture the main viewport")
+    main_panel = lease.panel
+    baseline = lease
+    def restored_to(snapshot):
+        now = DefinitionViewport.capture(main_panel)
+        return (now.isolated == snapshot.isolated and sorted(now.members) == sorted(snapshot.members)
+                and now.flags == snapshot.flags and now.camera_values == snapshot.camera_values
+                and all(abs(a-b) < 1e-7 for a, b in zip(now.matrix, snapshot.matrix)))
+    def click(role):
+        QTest.mouseClick(view.body_map, QtCore.Qt.LeftButton, pos=view.body_map.slot_position(role))
+        _pump(.2)
+    def main_shot(name):
+        shot = os.path.join(OUT_DIR, name + ".png")
+        cmds.playblast(editorPanelName=main_panel, frame=[cmds.currentTime(q=True)], format="image",
+                       compression="png", completeFilename=shot, viewer=False, showOrnaments=False,
+                       percent=100, widthHeight=[960, 640], offScreen=True, forceOverwrite=True)
+        return shot
+    REPORT["checks"]["match_main_isolated"] = bool(cmds.isolateSelect(main_panel, q=True, state=True))
+    REPORT["checks"]["match_joint_xray"] = bool(cmds.modelEditor(main_panel, q=True, jointXray=True))
+    REPORT["checks"]["match_no_embedded_panels"] = not view.findChildren(__import__(
+        "rigflow.ui.widgets.viewport_panel", fromlist=["ViewportPanel"]).ViewportPanel)
     hand = clip.mapping.matches["LeftHand"]
-    cmds.select([hand.source, hand.destination], replace=True)
-    _pump(0.4)
-    pair = controller.selected_pair(clip.clip_id)
-    REPORT["checks"]["selected_pair"] = list(pair)
-    window.match_view.poll_selection()
-    window.match_view.match_button.click()
+    source_hand, destination_hand = hand.source, hand.destination
+    view.clear_slot("LeftHand")
+    cmds.select(clear=True)
+    click("LeftHand")
+    REPORT["checks"]["slot_first_waits"] = view.waiting == "LeftHand"
+    _grab(window, "04_match_waiting")
+    cmds.select(destination_hand, replace=True)
+    _pump(.3)
+    REPORT["checks"]["wrong_model_rejected"] = view.waiting == "LeftHand" and hand.source is None
+    cmds.select(source_hand, replace=True)
+    _pump(.3)
+    REPORT["checks"]["slot_first_assigned"] = hand.source == source_hand and view.waiting is None
+    view.model_buttons["destination"].click()
+    _pump(.3)
+    members = cmds.sets(cmds.isolateSelect(main_panel, q=True, viewObjects=True), q=True) or []
+    REPORT["checks"]["switch_isolates_b"] = any(destination_hand.rsplit("|", 1)[-1] == n.rsplit("|", 1)[-1] for n in members) and not any(source_hand.rsplit("|", 1)[-1] == n.rsplit("|", 1)[-1] for n in members)
+    view.clear_slot("LeftHand")
+    cmds.select(destination_hand, replace=True)
+    click("LeftHand")
+    REPORT["checks"]["joint_first_assigned"] = hand.destination == destination_hand
+    cmds.select(clear=True)
+    click("LeftHand")
+    REPORT["checks"]["assigned_slot_selects_scene"] = controller.definition_joint(clip.clip_id, "destination", (cmds.ls(sl=True, long=True) or [""])[0]) == destination_hand
+    for display in ("Bones", "Mesh", "Both"):
+        view.display_buttons[display].click()
+        REPORT["checks"]["display_" + display.lower()] = (
+            bool(cmds.modelEditor(main_panel, q=True, joints=True)) == (display != "Mesh") and
+            bool(cmds.modelEditor(main_panel, q=True, polymeshes=True)) == (display != "Bones"))
+    REPORT["main_match_viewport"] = main_shot("04_main_viewport_both")
+    view.display_buttons["Bones"].click()
+    REPORT["main_bones_viewport"] = main_shot("04_main_viewport_bones")
+    view.display_buttons["Both"].click()
+    view.map_tabs.setCurrentIndex(1)
+    _grab(window, "04_match_hands")
+    view.map_tabs.setCurrentIndex(0)
     REPORT["checks"]["manual_match"] = bool(clip.mapping.matches["LeftHand"].manual)
     _grab(window, "04_matching")
     _viewport_diagnostics(window, "matching")
+    window.show_setup()
+    REPORT["checks"]["back_restores_main_viewport"] = restored_to(baseline)
+    cmds.isolateSelect(main_panel, state=False)
+    cmds.modelEditor(main_panel, edit=True, joints=True, polymeshes=False, jointXray=True)
+    baseline = DefinitionViewport.capture(main_panel)
+    window.open_match(clip.clip_id)
+    window.show_setup()
+    REPORT["checks"]["disabled_isolate_restored"] = restored_to(baseline)
+    window.open_match(clip.clip_id)
 
     # Keys before the transfer, to prove facial nodes stay untouched.
     facial_nodes = list(demo.facial_joints) + list(demo.facial_controls)
@@ -201,6 +280,7 @@ def run():
     source_before = key_counts(list(demo.source_joints.values()))
 
     window.open_transfer(clip.clip_id)
+    REPORT["checks"]["transfer_restores_main_viewport"] = restored_to(baseline)
     REPORT["checks"]["preview_started"] = bool(window.transfer_view._preview_ready)
     controller.set_frame(24)
     _pump(1.0)
@@ -332,7 +412,12 @@ def run():
         mesh_model and mesh_model.has_anim and mesh_model.anim.transferred)
     _grab(window, "09_rig_baked")
 
+    window.open_match(second_clip.clip_id)
+    close_baseline = controller._definition_viewport
     window.close()
+    REPORT["checks"]["close_restores_main_viewport"] = restored_to(close_baseline)
+    REPORT["checks"]["close_releases_definition"] = controller._definition_viewport is None
+    REPORT["checks"]["no_unexpected_service_errors"] = not REPORT.get("service_errors")
     _pump(0.3)
     REPORT["ok"] = all(REPORT["checks"].get(k) for k in (
         "rig_valid", "model_valid", "clip_added", "mapping_ok", "preview_started",
@@ -349,6 +434,13 @@ def run():
         "rig_transfer_viewports_embedded", "rig_transfer_hidden_viewports_released",
         "dissimilar_mesh_blocks_rig", "blocked_rig_does_not_start", "similar_mesh_enables_rig",
         "animation_waits_for_rig", "started_rig_steps_preserved",
+        "match_main_isolated", "match_joint_xray", "match_no_embedded_panels", "slot_first_waits",
+        "wrong_model_rejected", "slot_first_assigned", "switch_isolates_b", "joint_first_assigned",
+        "assigned_slot_selects_scene", "display_bones", "display_mesh", "display_both",
+        "back_restores_main_viewport", "transfer_restores_main_viewport", "close_restores_main_viewport",
+        "close_releases_definition",
+        "disabled_isolate_restored",
+        "no_unexpected_service_errors",
     ))
 
 

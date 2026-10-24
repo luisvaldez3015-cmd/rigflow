@@ -74,6 +74,7 @@ class ControllerBase(QtCore.QObject):
         self._fit = None
         self._fit_destination_id = None
         self._similarity_cache = {}
+        self._definition_viewport = None
         self._similarity_unsubscribe = self.session.subscribe(self._models_changed)
 
     def _models_changed(self, event, payload):
@@ -250,6 +251,65 @@ class ControllerBase(QtCore.QObject):
         if clip.mapping is None:
             raise MappingError("No mapping yet.", "Choose a destination rig and run Auto-match.")
         return clip.mapping
+
+    def definition_skeleton(self, clip_id, side):
+        clip = self.session.get_clip(clip_id)
+        return (clip.source_skeleton if clip else None) if side == "source" else (self.session.rig.skeleton if self.session.rig else None)
+
+    def definition_label(self, side):
+        character = self.session.source if side == "source" else self.session.destination
+        return self.session.label_for(character.character_id) if character else ("Model A" if side == "source" else "Model B")
+
+    def scene_selection(self):
+        """Current selection, never remembered across scene selection changes."""
+        return []
+
+    def definition_joint(self, clip_id, side, node):
+        skeleton = self.definition_skeleton(clip_id, side)
+        if skeleton:
+            matches = [j for j in skeleton if j == node or ("|" not in j and j == node.rsplit("|", 1)[-1])]
+            return matches[0] if len(matches) == 1 else None
+
+    def select_definition_joint(self, joint):
+        return None
+
+    def show_definition_model(self, clip_id, side, display="Both"):
+        """Begin/update the main-viewport lease, framing on model changes only."""
+        return None
+
+    def restore_definition_viewport(self):
+        """Idempotently restore the state captured on entering Match."""
+        return None
+
+    @action(default=False)
+    def set_definition(self, clip_id, role, side, joint):
+        skeleton = self.definition_skeleton(clip_id, side)
+        if joint is not None and (skeleton is None or joint not in skeleton):
+            raise MappingError("Choose a joint from {}.".format(self.definition_label(side)),
+                               hint="Switch models to define the other skeleton.")
+        if self.stop_preview(clip_id) is False:
+            return False
+        moved = self._mapping(clip_id).set_definition(role, side, joint)
+        self._refresh(self._clip(clip_id))
+        if moved:
+            self.session.status("Moved {} from {} to {}.".format(joint.rsplit("|", 1)[-1], ", ".join(moved), role))
+        return True
+
+    @action(default=False)
+    def clear_definition(self, clip_id, side):
+        if self.stop_preview(clip_id) is False:
+            return False
+        mapping = self._mapping(clip_id)
+        for role in list(mapping.matches):
+            mapping.set_definition(role, side, None)
+            # Clear all starts a fresh definition; Auto-detect may fill it again.
+            mapping.manual_sides[role].discard(side)
+            if not mapping.manual_sides[role]:
+                mapping.manual_sides.pop(role)
+                mapping.manual.pop(role)
+                mapping.matches[role].manual = False
+        self._refresh(self._clip(clip_id))
+        return True
 
     def _refresh(self, clip):
         report = self.validate(clip.clip_id)
@@ -636,6 +696,35 @@ class Controller(ControllerBase):
         result = self.start_plan() if self.session.plan.transfers_animation else {"step": "setup"}
         self.session.started_steps = started_steps
         return result
+
+    @action(default=list)
+    def scene_selection(self):
+        return self._service("inspector").selection()
+
+    @action()
+    def select_definition_joint(self, joint):
+        with self._service("undo").suspended_undo():
+            self._cmds().select(joint, replace=True)
+
+    @action()
+    def show_definition_model(self, clip_id, side, display="Both"):
+        if not compat.in_maya() or compat.is_batch():
+            return None
+        viewport = self._service("viewport")
+        if self._definition_viewport is None:
+            self._definition_viewport = viewport.DefinitionViewport.capture()
+        try:
+            self._definition_viewport.show(self.viewport_nodes(clip_id, side == "destination"), display)
+        except Exception:
+            self.restore_definition_viewport()
+            raise
+        return self._definition_viewport.panel
+
+    @action()
+    def restore_definition_viewport(self):
+        if self._definition_viewport is not None:
+            self._definition_viewport.restore()
+            self._definition_viewport = None
 
     @action(default=lambda: (None, None))
     def selected_pair(self, clip_id):
@@ -1027,6 +1116,7 @@ class Controller(ControllerBase):
     @action()
     def shutdown(self):
         # View widgets normally release these first; also cover partial embeds.
+        self.restore_definition_viewport()
         self._similarity_unsubscribe()
         self.cancel_rig_fit()
         for panel in list(self._viewport_cameras):

@@ -73,8 +73,16 @@ def main(argv=None):
     window.rig_view.bind_button.click()
     clip = controller.session.active_clip
     window.open_match(clip.clip_id)
-    window.match_view.set_details_expanded(True)
-    capture("07_match_details_expanded")
+    view = window.match_view
+    view.set_side("destination")
+    view.clear_slot("LeftHand")
+    controller.selection = []
+    view.click_slot("LeftHand")
+    capture("07_match_waiting")
+    controller.selection = ["l_wrist_JNT"]
+    view.poll_selection()
+    view.map_tabs.setCurrentIndex(1)
+    capture("07_match_hands")
     window.show_setup()
     controller.replace_model_from_file(destination.character_id, "other.obj")
     capture("08_setup_dissimilar_mesh")

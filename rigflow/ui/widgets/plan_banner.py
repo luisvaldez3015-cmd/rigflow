@@ -49,12 +49,12 @@ class ProcessCard(SectionCard):
         self.swap_button.setVisible(option.can_swap)
         similarity = option.similarity
         is_rig = option.action_label == "Start Rig"
-        self.similarity_label.setVisible(is_rig)
+        self.similarity_label.setVisible(is_rig and similarity is not None)
         self.verdict.setVisible(is_rig and similarity is not None)
         self.similarity_bar.setVisible(is_rig and similarity is not None)
         self.differing_label.setVisible(is_rig and bool(similarity and similarity.differing))
         if is_rig:
-            self.similarity_label.setText("Mesh similarity {:.0f}%".format(similarity.score) if similarity else "Mesh similarity unavailable")
+            self.similarity_label.setText("Mesh similarity {:.0f}%".format(similarity.score) if similarity else "")
         if similarity:
             color = theme.GREEN if similarity.matches else theme.RED
             self.verdict.set_status("Meshes match" if similarity.matches else "Meshes don't match", color)

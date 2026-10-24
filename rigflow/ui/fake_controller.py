@@ -57,6 +57,27 @@ class FakeController(ControllerBase):
         self._timer.timeout.connect(self._tick)
         self.scripted_pair = ("mixamorig:LeftHand", "l_wrist_JNT")
         self._selection_consumed = False
+        self.selection = []
+        self.definition_calls = []
+        self.definition_view_active = False
+
+    def scene_selection(self):
+        return list(self.selection)
+
+    def select_definition_joint(self, joint):
+        self.selection = [joint]
+        self.definition_calls.append(("select", joint))
+
+    def show_definition_model(self, clip_id, side, display="Both"):
+        if not self.definition_view_active:
+            self.definition_calls.append(("capture",))
+        self.definition_view_active = True
+        self.definition_calls.append(("show", clip_id, side, display))
+
+    def restore_definition_viewport(self):
+        if self.definition_view_active:
+            self.definition_calls.append(("restore",))
+            self.definition_view_active = False
 
     def _file_model(self, path):
         """Stem rules: mixamo/walk/jump/run/anim = animated rig only;

@@ -76,24 +76,23 @@ class UISmokeTests(unittest.TestCase):
         self.window.open_match(clip.clip_id)
         view = self.window.match_view
         self.app.processEvents()
-        self.assertEqual(view.mapping_table.rowCount(), len(clip.mapping.sorted_matches()))
+        self.assertIn("15/15", view.model_buttons["source"].text())
         self.assertEqual(self.window.stepper.current_step, 2)
         self.assertTrue(view.timer.isActive())
-        self.assertTrue(view.details.isHidden())
-        self.assertIn("mixamorig:LeftHand", view.source_selection.text())
-        self.assertIn("l_wrist_JNT", view.destination_selection.text())
-        view.match_button.click()
+        self.assertFalse(self.window.statusBar().isVisible())
+        self.assertFalse(hasattr(view, "details"))
+        view.clear_slot("LeftHand")
+        self.controller.selection = ["mixamorig:LeftHand"]
+        view.click_slot("LeftHand")
         self.assertTrue(clip.mapping.matches["LeftHand"].manual)
         self.assertEqual(clip.mapping.matches["LeftHand"].status, MatchStatus.GREEN)
-        row = next(i for i, match in enumerate(view.mapping_table.matches) if match.role == "LeftHand")
-        badge = view.mapping_table.cellWidget(row, 0)
-        from rigflow.ui import theme
-        self.assertEqual(badge.color.name(), theme.GREEN)
+        self.assertEqual(view.body_map.states["LeftHand"], "assigned")
         self.assertTrue(view.review_button.isEnabled())
         self.window.open_transfer(clip.clip_id)
         self.assertEqual(self.window.stepper.current_step, 3)
         self.assertFalse(view.timer.isActive())
         self.assertIs(self.window.stack.currentWidget(), self.window.transfer_view)
+        self.assertTrue(self.window.statusBar().isVisible())
         self.window.transfer_view._set_frame(23.5)
         self.assertEqual(self.controller.current_frame(), 23.5)
         with mock.patch.object(self.controller, "bake", wraps=self.controller.bake) as bake:
@@ -119,17 +118,16 @@ class UISmokeTests(unittest.TestCase):
         self.window.open_match(clip.clip_id)
         view = self.window.match_view
         # Required unmatched roles block Transfer; automatic reset restores them.
-        self.controller.remember_selected(clip.clip_id, "mixamorig:Hips")
-        self.controller.remember_selected(clip.clip_id, "pelvis_JNT", True)
-        view.poll_selection()
-        view.unmatch_button.click()
+        view.set_side("destination")
+        view.clear_slot("Hips")
         self.assertIsNone(clip.mapping.matches["Hips"].destination)
         self.assertFalse(view.review_button.isEnabled())
         self.controller.clear_manual(clip.clip_id)
         self.assertTrue(view.review_button.isEnabled())
+
         self.window.show_setup()
         self.assertFalse(view.timer.isActive())
-        self.assertEqual(self.controller.selected_pair(clip.clip_id), (None, None))
+        self.assertFalse(self.controller.definition_view_active)
 
     def test_new_animation_replaces_source_and_retains_destination(self):
         clip = self.populated_clip()
@@ -272,8 +270,8 @@ class UISmokeTests(unittest.TestCase):
         banner.swap_button.click()
         self.assertIs(self.controller.session.source, b)
         self.window.start_plan()
-        self.assertEqual(self.window.match_view.source_viewport.header.text(), "Model B · hero")
-        self.assertEqual(self.window.match_view.destination_viewport.header.text(), "Model A · walk")
+        self.assertEqual(self.window.match_view.model_buttons["source"].text(), "Model B  15/15")
+        self.assertEqual(self.window.match_view.model_buttons["destination"].text(), "Model A  15/15")
         self.assertEqual(len(self.controller.session.clips), 2)
         self.window.show_setup()
         replacement = self.controller.replace_model_from_file(a.character_id, "Nova.ma")
@@ -348,7 +346,7 @@ class UISmokeTests(unittest.TestCase):
         self.controller.set_excluded(clip.clip_id, "Hips", False)
         self.assertTrue(self.controller.validate(clip.clip_id).ok)
 
-    def test_preset_roundtrip_and_joint_search(self):
+    def test_preset_roundtrip_and_slot_tooltips(self):
         clip = self.populated_clip()
         match = clip.mapping.matches["Hips"]
         self.controller.set_manual_match(clip.clip_id, "Hips", match.source, match.destination)
@@ -360,10 +358,88 @@ class UISmokeTests(unittest.TestCase):
             self.assertTrue(report.ok)
             self.assertTrue(clip.mapping.matches["Hips"].manual)
         self.window.open_matching(clip.clip_id)
-        tree = self.window.matching_view.source_tree
-        tree.search.setText("LeftHand")
-        self.assertFalse(tree.items["mixamorig:LeftHand"].isHidden())
-        self.assertTrue(tree.items["mixamorig:RightFoot"].isHidden())
+        body = self.window.matching_view.body_map
+        self.assertEqual(body.joints["LeftHand"], "mixamorig:LeftHand")
+        self.assertEqual(body.role_at(body.slot_position("LeftHand")), "LeftHand")
+
+    def test_definition_slot_first_wrong_model_cancel_and_joint_first(self):
+        from PySide2.QtTest import QTest
+        clip = self.populated_clip()
+        self.window.open_match(clip.clip_id)
+        view = self.window.match_view
+        view.clear_slot("LeftHand")
+        self.controller.selection = []
+        QTest.mouseClick(view.body_map, QtCore.Qt.LeftButton, pos=view.body_map.slot_position("LeftHand"))
+        self.assertEqual(view.waiting, "LeftHand")
+        self.assertEqual(view.body_map.waiting, "LeftHand")
+        self.controller.selection = ["l_wrist_JNT"]
+        view.poll_selection()
+        self.assertEqual(view.waiting, "LeftHand")
+        self.assertIn("belongs to Model B", view.status_line.text())
+        self.controller.selection = ["mixamorig:LeftHand", "mixamorig:RightHand"]
+        view.poll_selection()
+        self.assertIsNone(clip.mapping.matches["LeftHand"].source)
+        self.controller.selection = ["mixamorig:LeftHand"]
+        view.poll_selection()
+        self.assertEqual(clip.mapping.matches["LeftHand"].source, "mixamorig:LeftHand")
+        self.assertIsNone(view.waiting)
+        self.controller.selection = []
+        view.click_slot("LeftHand")
+        self.assertEqual(self.controller.selection, ["mixamorig:LeftHand"])
+        view.clear_slot("LeftHand")
+        self.controller.selection = []
+        view.click_slot("LeftHand")
+        view.click_slot("LeftHand")
+        self.assertIsNone(view.waiting)
+        view.click_slot("LeftHand")
+        QTest.keyClick(view, QtCore.Qt.Key_Escape)
+        self.assertIsNone(view.waiting)
+        self.controller.selection = ["mixamorig:LeftHand"]
+        view.click_slot("LeftHand")
+        self.assertEqual(clip.mapping.matches["LeftHand"].source, "mixamorig:LeftHand")
+        self.assertTrue(view.review_button.isEnabled())
+
+        def clear_from_context_menu():
+            menu = self.app.activePopupWidget()
+            self.assertEqual([a.text() for a in menu.actions()], ["Clear", "Select in scene"])
+            menu.actions()[0].trigger()
+            menu.close()
+        QtCore.QTimer.singleShot(0, clear_from_context_menu)
+        QTest.mouseClick(view.body_map, QtCore.Qt.RightButton, pos=view.body_map.slot_position("LeftHand"))
+        self.assertIsNone(clip.mapping.matches["LeftHand"].source)
+
+    def test_definition_moves_clear_confirm_presets_and_lifetime(self):
+        clip = self.populated_clip()
+        self.window.open_match(clip.clip_id)
+        view = self.window.match_view
+        self.controller.selection = ["mixamorig:LeftHand"]
+        view.click_slot("RightHand")
+        self.assertIsNone(clip.mapping.matches["LeftHand"].source)
+        self.assertIn("Moved", view.status_line.text())
+        self.assertFalse(view.review_button.isEnabled())
+        view.set_side("destination")
+        view.display_buttons["Bones"].click()
+        self.assertEqual(self.controller.definition_calls[-1], ("show", clip.clip_id, "destination", "Bones"))
+        with mock.patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.No):
+            view.clear_button.click()
+        self.assertEqual(clip.mapping.matches["Hips"].destination, "pelvis_JNT")
+        with mock.patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Yes):
+            view.clear_button.click()
+        self.assertTrue(all(not m.destination for m in clip.mapping.matches.values()))
+        view.auto_button.click()
+        self.assertEqual(clip.mapping.matches["Hips"].destination, "pelvis_JNT")
+        self.assertEqual([a.text() for a in view.preset_menu.actions()], ["Load preset…", "Save preset…"])
+        view.map_tabs.setCurrentIndex(1)
+        self.assertEqual(len(view.body_map.slots), 32)
+        self.assertEqual(view.body_map.role_at(view.body_map.slot_position("LeftHandThumb3")), "LeftHandThumb3")
+        self.window.show_setup()
+        self.assertEqual(self.controller.definition_calls[-1], ("restore",))
+        restores = self.controller.definition_calls.count(("restore",))
+        view.deactivate()
+        self.assertEqual(restores, self.controller.definition_calls.count(("restore",)))
+        self.window.open_match(clip.clip_id)
+        self.window.close()
+        self.assertFalse(self.controller.definition_view_active)
 
     def test_missing_services_are_status_errors(self):
         from rigflow.ui.controller import Controller

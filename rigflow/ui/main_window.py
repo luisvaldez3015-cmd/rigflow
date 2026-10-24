@@ -112,6 +112,8 @@ class MainWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
         self._update_stepper()
 
     def _update_stepper(self):
+        # Match owns one contextual status line; avoid a second, stale readout.
+        self.statusBar().setVisible(self.stack.currentWidget() is not self.match_view)
         names = (self.session.started_steps if self.stack.currentWidget() is not self.setup_view
                  and self.session.started_steps else self.session.plan.steps)
         self.stepper.set_steps(names)

@@ -142,6 +142,8 @@ class JointMapping:
         self.destination_name = destination_name
         self.matches: Dict[str, JointMatch] = {}
         self.manual: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
+        # Absent entry means a legacy pair override; new definitions edit one side.
+        self.manual_sides: Dict[str, Set[str]] = {}
         self.excluded: Set[str] = set()
 
     # --- editing ---------------------------------------------------------------------
@@ -175,13 +177,35 @@ class JointMapping:
     def set_manual(self, role: str, source: Optional[str], destination: Optional[str]) -> JointMatch:
         """Store a user correction for ``role`` and apply it."""
         self.manual[role] = (source, destination)
+        self.manual_sides.pop(role, None)
         if role not in self.matches:
             self.matches[role] = JointMatch(role=role)
         return self._apply_one_manual(role)
 
+    def set_definition(self, role: str, side: str, joint: Optional[str]) -> List[str]:
+        """Edit one definition, moving reused joints; keep the opposite side automatic."""
+        if side not in ("source", "destination"):
+            raise ValueError("Unknown definition side: " + side)
+        moved = []
+        if joint is not None:
+            for other, match in list(self.matches.items()):
+                if other != role and getattr(match, side) == joint:
+                    self.set_definition(other, side, None)
+                    moved.append(other)
+        match = self.matches.setdefault(role, JointMatch(role=role))
+        sides = self.manual_sides.setdefault(role, {"source", "destination"} if role in self.manual else set())
+        sides.add(side)
+        pair = [match.source, match.destination]
+        pair[int(side == "destination")] = joint
+        self.manual[role] = tuple(pair)
+        self.excluded.discard(role)
+        self._apply_one_manual(role)
+        return moved
+
     def clear_manual(self, role: str) -> None:
         """Drop the manual override of one role (the automatic match remains)."""
         self.manual.pop(role, None)
+        self.manual_sides.pop(role, None)
         match = self.matches.get(role)
         if match is not None:
             match.manual = False
@@ -216,13 +240,16 @@ class JointMapping:
     def _apply_one_manual(self, role: str) -> JointMatch:
         source, destination = self.manual[role]
         match = self.matches.setdefault(role, JointMatch(role=role))
-        match.source = source
-        match.destination = destination
+        sides = self.manual_sides.get(role, {"source", "destination"})
+        if "source" in sides:
+            match.source = source
+        if "destination" in sides:
+            match.destination = destination
         match.manual = True
-        match.confidence = CONFIDENCE_MANUAL if (source and destination) else 0.0
+        match.confidence = CONFIDENCE_MANUAL if match.complete else 0.0
         match.excluded = role in self.excluded
         match.status = status_for(
-            match.confidence, source is not None, destination is not None, is_required(role),
+            match.confidence, match.source is not None, match.destination is not None, is_required(role),
             manual=True, excluded=match.excluded,
         )
         return match
@@ -270,6 +297,7 @@ class JointMapping:
             "destination_name": self.destination_name,
             "matches": [m.to_dict() for m in self.sorted_matches()],
             "manual": {role: list(pair) for role, pair in self.manual.items()},
+            "manual_sides": {role: sorted(sides) for role, sides in self.manual_sides.items()},
             "excluded": sorted(self.excluded),
         }
 
@@ -284,8 +312,9 @@ class JointMapping:
                 item["role"], item.get("source"), item.get("destination"),
                 float(item.get("confidence", 0.0)), item.get("notes", []),
             )
-        for role, pair in data.get("manual", {}).items():
-            mapping.set_manual(role, pair[0], pair[1])
+        mapping.manual = {role: (pair[0], pair[1]) for role, pair in data.get("manual", {}).items()}
+        mapping.manual_sides = {role: set(sides) for role, sides in data.get("manual_sides", {}).items()}
+        mapping.apply_manual()
         return mapping
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid

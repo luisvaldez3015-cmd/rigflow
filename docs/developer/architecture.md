@@ -312,7 +312,44 @@ UI (`rigflow/ui`):
   `open_match(clip_id)`, `open_transfer(clip_id)`, `show_setup()`, `new_animation()` (back to
   Setup and replace the source model from a file), `validate_active()` kept for scripts.
   `add_menu`: "From file…", "Use Maya selection", "From scene…" (picker over `list_scene_candidates()`).
-- Match viewport titles come from the session labels ("Model A · <name>"), not hard-coded "Mesh A/B".
+- Match model toggles use session model labels, preserving Setup identity on swap.
+
+## Contract: character definitions (Match redesign, 2026-10-23)
+
+- `MatchingView` renders `JointMapping`: source and destination are independent
+  definitions, presented as Model A/B in the default transfer direction.
+  `BodyMap` paints Body and Hands (five fingers × three phalanges); slots expose
+  `slot_position(role)` and `role_at(point)` for the same hit-testing used by tests.
+- `JointMapping.set_definition(role, side, joint)` edits one side and moves any
+  reused joint out of other roles on that side. `manual_sides` tracks which sides
+  of each `manual` pair are locked. `build_mapping` preserves those overrides
+  while recomputing the other side. JSON presets keep version 1 and add optional
+  `manual_sides`; older pair overrides still lock both sides. Explicit single-slot
+  clears persist across Auto-detect. Clear all resets the active side's overrides.
+- `mapping.definition` supplies pure per-side progress and slot states. Progress
+  counts the existing 15 `REQUIRED_ROLES`; optional roles never gate transfer.
+  All required slots on both sides plus `validate().ok` gate Transfer.
+- `ControllerBase.definition_skeleton(clip_id, side)`, `definition_label(side)`,
+  `definition_joint(clip_id, side, node)`, `scene_selection()`,
+  `set_definition(clip_id, role, side, joint)`, `clear_definition(clip_id, side)`
+  and `select_definition_joint(joint)` are the UI boundary. Selection is current,
+  never a remembered pair. Waiting consumes one selection change, accepts exactly
+  one joint from the active skeleton, and cancels on Esc/reclick/model change/exit.
+- `show_definition_model(clip_id, side, display="Both")` captures a
+  `scene.viewport.DefinitionViewport` lease on the first call, then updates it.
+  It uses the main artist model panel, excluding owned embedded panels. Only
+  joints and visible mesh shapes participate; no node visibility attributes change.
+  Switching models replaces isolate membership and frames; changing display only
+  updates `joints`/`polymeshes`, with `jointXray=True`.
+- `restore_definition_viewport()` restores original isolate membership/state,
+  joint X-ray, joint/mesh flags and camera transform/framing. It is idempotent
+  and is called on Back, Transfer, hide, close, dispose and controller shutdown.
+  FakeController records capture/show/select/restore calls. Batch Maya rejects
+  viewport capture; real UI behavior is verified by `maya_gui_check.py`.
+- Match has no embedded viewports, trees, Details table or link overlay.
+  MainWindow hides its global status bar while Match owns the contextual line.
+  Rig and Transfer retain their `ViewportPanel` widgets. HumanIK still transfers
+  joint pairs through the existing retargeting contract.
 
 ## Contract: `rigflow.retargeting` (Maya)
 
@@ -383,8 +420,8 @@ stem rules: twin/copy/same →96%, statue/other →41%, otherwise 92%, head →H
 - `rigflow/ui/controller.py` is the only UI module importing scene/retargeting.
 - `rigflow/ui/launcher.py::show(dev_reload=False)` returns the single main window
   (object name `config.WINDOW_OBJECT_NAME`), raising it if already open.
-- Views: `main_window.py` (Model / Rig / Animation sections), `matching_view.py`
-  (source and destination panels, mapping table with statuses), `review_view.py`
+- Views: `main_window.py` (Setup / Rig / Match / Transfer), `matching_view.py`
+  (character definition body/hands map and main viewport lease), `review_view.py`
   (playback controls, warnings, Back / Confirm).
 - Every widget must be constructible off-screen (`QT_QPA_PLATFORM=offscreen`)
   with a fake controller for smoke tests.

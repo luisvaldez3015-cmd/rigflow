@@ -4,7 +4,7 @@ RigFlow pairs the joints of the source and the destination skeleton through a
 shared vocabulary of **roles** (`Hips`, `Spine`, `Spine1`, `Neck`, `Head`,
 `LeftShoulder`, `LeftArm`, `LeftForeArm`, `LeftHand`, `LeftUpLeg`, `LeftLeg`,
 `LeftFoot`, `LeftToeBase`, fingers, and the mirrored right side). Each skeleton
-is labeled against this vocabulary on its own; the mapping table is simply the
+is labeled against this vocabulary on its own; the mapping is simply the
 join on role. This is why two skeletons with different joint counts, names and
 proportions can still be matched.
 
@@ -31,22 +31,23 @@ The two results are fused per joint:
 | Name is ambiguous (`shoulder` = clavicle or upper arm, `leg` = thigh or shin) and topology picks one | **Green**, confidence 0.90 |
 | Only the name gives a role (fingers, joints outside the main chains) | Green when the name is explicit (0.80), otherwise **Yellow** |
 | Only topology gives a role (nameless `joint12` skeletons) | **Yellow**, confidence 0.65 |
-| Name and topology disagree | **Yellow** with an explanation in the row's tooltip |
+| Name and topology disagree | **Yellow**; review the slot in the viewport |
 | Two joints claim the same role | The stronger one keeps it; the other becomes unassigned |
 
 Spine and neck chains are renumbered by hierarchy depth, so `spine_01…05`,
 `Spine/Spine1/Spine2` and `Spine1_M/Spine2_M/Chest_M` line up as far as both
-skeletons go; extra joints on the longer chain are shown as *unavailable*.
+skeletons go; optional joints without a counterpart are skipped during transfer.
 
-## Reading the mapping table
+## Reading the definition map
 
 | Status | Meaning | What to do |
 |--------|---------|------------|
-| Green | High-confidence or manual match, both joints present | Nothing |
-| Yellow | Match present but needs review | Check it in the viewport; confirm or correct |
-| Red | A required role is missing or the match is unreliable | Fix it before transferring |
-| Gray (unavailable) | Optional role present on only one skeleton | Nothing; it is skipped |
-| Purple (excluded) | You chose not to transfer this role | Re-enable it if needed |
+| Green | This model's joint is assigned with high confidence or manually | Nothing |
+| Yellow | Automatic guess needs review | Check it in the viewport; correct if needed |
+| Red outline | Required slot empty | Connect a joint |
+| Solid red | Invalid, duplicated or excluded definition from a preset | Clear and reconnect it |
+| Small gray outline | Optional slot empty | Leave it empty when the model lacks that bone |
+| Cyan | Waiting for a scene joint selection | Select one joint, or Esc to cancel |
 
 Required roles (Hips, Spine, Head, both arms with forearm and hand, both legs
 with shin and foot) can never be excluded and must be complete on both sides.
@@ -55,19 +56,21 @@ with shin and foot) can never be excluded and must be complete on both sides.
 
 In the **Match** step:
 
-1. Click a joint in the **Model A** viewport (source), then the corresponding
-   joint in **Model B** (destination). The *Selection* readout shows A and B.
-2. Press **Match**. The role of joint A (or of B, when A has none) now pairs
-   the two joints; the row turns green and is marked *manual*.
-3. **Unmatch** drops the pair of the selected joint.
+1. Choose **Model A** or **Model B**. Maya's main viewport isolates that model;
+   **Bones / Mesh / Both** changes its display, with joint X-ray enabled.
+2. Click an empty slot on **Body** or **Hands**, then select that joint in Maya.
+   The slot turns green. Esc or clicking it again cancels waiting.
+3. Repeat for the other model. The counters track the 15 required body roles.
 
-You can also double-click joints in the two hierarchy trees under
-**Details**, or select a row in the table to choose the role explicitly.
+You may select one joint first, then click its slot. Clicking an assigned slot
+selects its scene joint; right-click **Clear** before a slot-first replacement.
+A reused joint moves from its old role. Joints from the other model warn instead
+of assigning. Manual edits affect only the chosen model.
 
-Manual corrections survive **Auto-match** recomputations. **Reset to automatic**
-(under **Details**) discards them explicitly. Mappings can be saved as
-`.rigflow.json` presets and reloaded for the next animation between the same
-two skeletons.
+**Auto-detect** preserves manual assignments and individual clears. **Clear all**
+confirms and resets the active definition so Auto-detect can start it again.
+Use **… → Save preset… / Load preset…** for the next animation between the same
+two skeletons. Leaving Match restores the previous main viewport and camera.
 
 ## Validation
 

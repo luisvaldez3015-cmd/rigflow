@@ -166,6 +166,7 @@ def build_mapping(
     mapping = JointMapping(source.skeleton_name, destination.skeleton_name)
     if previous is not None:
         mapping.manual = dict(previous.manual)
+        mapping.manual_sides = {role: set(sides) for role, sides in previous.manual_sides.items()}
         mapping.excluded = set(previous.excluded)
 
     source_roles = source.roles()
