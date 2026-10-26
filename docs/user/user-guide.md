@@ -78,30 +78,49 @@ rig transfer and returns to Setup.
 
 ## Step 2 · Match (Character definition)
 
-Choose **Model A** or **Model B** and define its joints on the **Body** or
-**Hands** map. The counters show the 15 required HumanIK roles per model;
-smaller slots (extra spines, shoulders, neck, toes and fingers) are optional.
-The A-pose figure uses two label columns with leaders to each joint; the Hands
-map follows an open-hand pose. Hover a joint to read labels hidden at small sizes.
-The compact toolbar keeps model selection, detection, presets and display mode
-in one row so the definition figure has the available space at smaller windows.
-The main Maya viewport isolates and frames that model with joint X-ray on.
-Use **Bones / Mesh / Both** to change its display. Leaving Match restores the
-previous viewport isolation, display flags and camera framing.
+Define **Model A** and **Model B** on two maps shown side by side. Each header
+shows the model's Setup identity, transfer direction, name and required-role
+count (15/15 turns green). Click a slot or the empty area of a panel to make
+that model active: its header turns cyan and Maya's main viewport isolates
+and frames it with joint X-ray on. Clicking empty space also cancels waiting.
+
+The figures have no label columns or leader lines. Small **R / L** hints use
+the character's orientation (right is screen-left); hover a slot for its role,
+full joint name (or **not connected**) and required/optional status. Smaller
+slots (extra spines, shoulders, neck, toes and fingers) are optional.
+
+Spine and neck slots adapt independently to each model: six spine joints show
+**Spine…Spine 5**, and two neck joints show **Neck, Neck 1**. Longer chains use
+smaller, evenly spaced dots (up to Spine 9 / Neck 9); hover for the slot name
+and joint. Every extra slot supports the same selection and matching actions.
+The map always keeps four spine slots and one neck slot available. Twist/roll
+helpers, facial joints, props and end tips are ignored.
+
+The centre column contains **Auto-match**, **Unmatch**, a shared **Body / Hands**
+switch, and **Selection** with the selected role and both model joints. The
+selected role has a thin cyan ring on both maps. Long scene names are shortened;
+hover the selection text or model header to read the full name. **Connected /
+Review / Missing** counts combine both models, including optional connections;
+Missing counts required roles only, and Review includes invalid definitions.
+Use **Bones / Mesh / Both** to change the main viewport display (Both by default).
+Leaving Match restores its previous isolation, display flags and camera framing.
 
 - Click an empty slot, then select its joint in Maya. Cyan means waiting;
   **Esc** or clicking the same slot again cancels. Alternatively, select one
   joint first and click its slot to assign it immediately.
 - Green means assigned; yellow asks you to review an automatic guess. A red
   outline means a required slot is empty; solid red means an invalid definition.
-  Hover a slot for its role and joint. Click an assigned slot to select its
-  joint, or right-click for **Clear / Select in scene**. To replace it, clear
-  it first or select the replacement joint before clicking.
+  Click an assigned slot to select its joint, or right-click for **Clear /
+  Select in scene** on that model only. To replace it, clear it first or select
+  the replacement joint before clicking.
 - A joint used by another role moves to the new role. A joint belonging to
-  the other model produces a warning and is never assigned.
-- **Auto-detect** keeps manual assignments and individually cleared slots.
-  **Clear all** confirms, resets only the active model and lets Auto-detect
-  start that definition again. **…** contains **Load preset… / Save preset…**.
+  the other model produces a warning and is never assigned while waiting.
+- **Unmatch** clears the selected role on both models. It is available only
+  when that role has a joint on at least one model.
+- **Auto-match** keeps manual assignments and individually cleared slots.
+  **…** contains **Load preset… / Save preset… / Clear Model A / Clear Model B**.
+  Clearing a model asks for confirmation, resets only its definition and lets
+  Auto-match start that definition again.
 
 The status line points to the next missing required role. **Transfer** is
 enabled when both models have all required roles and validation has no errors.

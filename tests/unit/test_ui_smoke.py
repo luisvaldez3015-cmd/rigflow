@@ -76,7 +76,7 @@ class UISmokeTests(unittest.TestCase):
         self.window.open_match(clip.clip_id)
         view = self.window.match_view
         self.app.processEvents()
-        self.assertIn("15/15", view.model_buttons["source"].text())
+        self.assertIn("15/15", view.count_labels["source"].text())
         self.assertEqual(self.window.stepper.current_step, 2)
         self.assertTrue(view.timer.isActive())
         self.assertFalse(self.window.statusBar().isVisible())
@@ -270,8 +270,8 @@ class UISmokeTests(unittest.TestCase):
         banner.swap_button.click()
         self.assertIs(self.controller.session.source, b)
         self.window.start_plan()
-        self.assertEqual(self.window.match_view.model_buttons["source"].text(), "Model B  15/15")
-        self.assertEqual(self.window.match_view.model_buttons["destination"].text(), "Model A  15/15")
+        self.assertTrue(self.window.match_view.header_labels["source"].full_text.startswith("Model B · source ·"))
+        self.assertTrue(self.window.match_view.header_labels["destination"].full_text.startswith("Model A · destination ·"))
         self.assertEqual(len(self.controller.session.clips), 2)
         self.window.show_setup()
         replacement = self.controller.replace_model_from_file(a.character_id, "Nova.ma")
@@ -488,14 +488,14 @@ class UISmokeTests(unittest.TestCase):
         view.display_buttons["Bones"].click()
         self.assertEqual(self.controller.definition_calls[-1], ("show", clip.clip_id, "destination", "Bones"))
         with mock.patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.No):
-            view.clear_button.click()
+            view.clear_actions["destination"].trigger()
         self.assertEqual(clip.mapping.matches["Hips"].destination, "pelvis_JNT")
         with mock.patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Yes):
-            view.clear_button.click()
+            view.clear_actions["destination"].trigger()
         self.assertTrue(all(not m.destination for m in clip.mapping.matches.values()))
         view.auto_button.click()
         self.assertEqual(clip.mapping.matches["Hips"].destination, "pelvis_JNT")
-        self.assertEqual([a.text() for a in view.preset_menu.actions()], ["Load preset…", "Save preset…"])
+        self.assertEqual([a.text() for a in view.preset_menu.actions()], ["Load preset…", "Save preset…", "Clear Model A", "Clear Model B"])
         view.map_tabs.setCurrentIndex(1)
         self.assertEqual(len(view.body_map.slots), 32)
         self.assertEqual(view.body_map.role_at(view.body_map.slot_position("LeftHandThumb3")), "LeftHandThumb3")
@@ -507,6 +507,195 @@ class UISmokeTests(unittest.TestCase):
         self.window.open_match(clip.clip_id)
         self.window.close()
         self.assertFalse(self.controller.definition_view_active)
+
+    def test_two_definition_maps_sync_unmatch_and_minimum_layout(self):
+        from PySide2.QtTest import QTest
+        from rigflow.mapping.definition import joint_for
+        clip = self.populated_clip()
+        self.window.open_match(clip.clip_id)
+        view = self.window.match_view
+        self.window.resize(960, 640)
+        self.app.processEvents()
+        self.assertEqual(self.window.size(), QtCore.QSize(960, 640))
+        self.assertFalse(view.unmatch_button.isEnabled())
+        self.assertEqual(set(view.body_maps), {"source", "destination"})
+        self.assertEqual(view.panels["source"].width(), view.panels["destination"].width())
+        for index in (0, 1):
+            view.map_tabs.setCurrentIndex(index)
+            self.app.processEvents()
+            for side, body in view.body_maps.items():
+                self.assertEqual(body.hands, index == 1)
+                self.assertFalse(body.show_labels)
+                self.assertGreaterEqual(body.width(), 330)
+                for role in body.slots:
+                    self.assertTrue(body.rect().contains(body.slot_position(role)))
+                    self.assertEqual(body.role_at(body.slot_position(role)), role)
+                origin = body.mapTo(view, QtCore.QPoint())
+                self.assertTrue(view.rect().contains(QtCore.QRect(origin, body.size())))
+                self.assertFalse(body.grab().isNull())
+        view.map_tabs.setCurrentIndex(0)
+        body = view.body_maps["destination"]
+        self.controller.selection = []
+        QTest.mouseClick(body, QtCore.Qt.LeftButton, pos=body.slot_position("LeftForeArm"))
+        self.assertEqual(view.side, "destination")
+        self.assertTrue(view.panel_headers["destination"].property("active"))
+        self.assertFalse(view.panel_headers["source"].property("active"))
+        self.assertEqual(self.controller.definition_calls[-2][0], "show")
+        self.assertTrue(all(b.selected_role == "LeftForeArm" for b in view.body_maps.values()))
+        self.assertEqual(view.selection_role.full_text, "Left Forearm")
+        for side, prefix in (("source", "A"), ("destination", "B")):
+            self.assertEqual(view.selection_labels[side].toolTip(), "{}: {}".format(prefix, joint_for(clip.mapping, "LeftForeArm", side)))
+        self.assertTrue(view.unmatch_button.isEnabled())
+        view.unmatch_button.click()
+        self.assertTrue(all(joint_for(clip.mapping, "LeftForeArm", side) is None for side in view.body_maps))
+        self.assertFalse(view.unmatch_button.isEnabled())
+        self.assertFalse(view.review_button.isEnabled())
+        view.auto_button.click()
+        self.assertTrue(all(joint_for(clip.mapping, "LeftForeArm", side) is None for side in view.body_maps))
+        self.controller.selection = []
+        QTest.mouseClick(body, QtCore.Qt.LeftButton, pos=body.slot_position("LeftForeArm"))
+        self.assertEqual(view.waiting, "LeftForeArm")
+        self.assertIsNone(view.body_maps["source"].waiting)
+        self.assertEqual(body.waiting, "LeftForeArm")
+        QTest.mouseClick(view.body_maps["source"], QtCore.Qt.LeftButton, pos=QtCore.QPoint(8, 50))
+        self.assertEqual(view.side, "source")
+        self.assertIsNone(view.waiting)
+        self.assertTrue(all(b.waiting is None for b in view.body_maps.values()))
+        self.assertEqual(self.controller.definition_calls[-1], ("show", clip.clip_id, "source", "Both"))
+        view.click_slot("LeftForeArm")
+        QTest.mouseClick(view.panel_headers["source"], QtCore.Qt.LeftButton)
+        self.assertIsNone(view.waiting)
+        for widget in (view.centre_column, view.auto_button, view.unmatch_button, view.menu_button, *view.display_buttons.values()):
+            self.assertTrue(view.rect().contains(QtCore.QRect(widget.mapTo(view, QtCore.QPoint()), widget.size())))
+
+    def test_labelless_map_tooltips_and_selection_ring(self):
+        from PySide2.QtTest import QTest
+        from rigflow.ui.widgets.body_map import BodyMap
+        from rigflow.ui.qt import QtGui
+        body = BodyMap(show_labels=False)
+        self.addCleanup(body.close)
+        body.resize(330, 390)
+        body.show()
+        self.app.processEvents()
+        body.joints["LeftForeArm"] = "mixamorig:LeftForeArm"
+        self.app.sendEvent(body, QtGui.QMouseEvent(QtCore.QEvent.MouseMove, body.slot_position("LeftForeArm"), QtCore.Qt.NoButton, QtCore.Qt.NoButton, QtCore.Qt.NoModifier))
+        self.assertEqual(body.toolTip(), "Left Forearm · mixamorig:LeftForeArm\nRequired")
+        plain = body.grab().toImage()
+        body.selected_role = "LeftForeArm"
+        selected = body.grab().toImage()
+        self.assertNotEqual(plain, selected)
+        body.hovered = None
+        body.joints.clear()
+        QTest.mouseMove(body, QtCore.QPoint(2, 2))
+        self.app.sendEvent(body, QtGui.QMouseEvent(QtCore.QEvent.MouseMove, body.slot_position("Neck"), QtCore.Qt.NoButton, QtCore.Qt.NoButton, QtCore.Qt.NoModifier))
+        self.assertEqual(body.toolTip(), "Neck · not connected\nOptional")
+        with mock.patch.object(body, "_draw_labels") as labels, mock.patch.object(body, "_draw_leaders") as leaders:
+            body.grab()
+            labels.assert_not_called()
+            leaders.assert_not_called()
+
+    def test_dynamic_chain_geometry_and_distinct_hits(self):
+        import math
+        from itertools import combinations
+        from rigflow.ui.widgets.body_map import BodyMap, BODY_SLOTS, body_layout, hand_slots
+        from rigflow.skeleton.roles import role_name
+        body = BodyMap(show_labels=False)
+        self.addCleanup(body.close)
+        body.resize(360, 390)
+        original = body_layout()
+        self.assertEqual({r: (j["x"], j["y"]) for r, j in original["joints"].items()}, BODY_SLOTS)
+        for spines, necks in ((4, 1), (6, 2), (10, 1), (10, 10)):
+            body.waiting = body.selected_role = None
+            roles = {role_name(part, index=i) for part, n in (("Spine", spines), ("Neck", necks)) for i in range(n)}
+            body.set_roles(roles | {"Spine99", "Neck10", "Jaw", "LeftArm_twist"})
+            self.assertEqual(set(body.slots) - set(BODY_SLOTS), roles - set(BODY_SLOTS))
+            chain = ["Hips"] + [role_name("Spine", index=i) for i in range(spines)] + [role_name("Neck", index=i) for i in range(necks)] + ["Head"]
+            self.assertTrue(all((a, b) in body._view()["bones"] for a, b in zip(chain, chain[1:])))
+            self.assertIn([role_name("Spine", index=spines - 1), "LeftShoulder"], body._view()["bones"])
+            for part, n in (("Spine", spines), ("Neck", necks)):
+                ys = [body.slots[role_name(part, index=i)][1] for i in range(n)]
+                self.assertTrue(all(a > b for a, b in zip(ys, ys[1:])))
+                gaps = [a - b for a, b in zip(ys, ys[1:])]
+                if gaps:
+                    self.assertAlmostEqual(min(gaps), max(gaps), delta=0.15)
+            for role in body.slots:
+                self.assertEqual(body.role_at(body.slot_position(role)), role)
+            for a, b in combinations(body.slots, 2):
+                pa, pb = body._screen_point(a), body._screen_point(b)
+                distance = math.hypot(pa.x() - pb.x(), pa.y() - pb.y())
+                self.assertLess(body._hit_radius(a) + body._hit_radius(b), distance)
+                self.assertLess(body._radius(a) + body._radius(b), distance)
+            for role in roles - {"Spine"}:
+                self.assertEqual(body._state(role), "empty")
+            body.selected_role = body.waiting = chain[-3]
+            self.assertFalse(body.grab().isNull())
+            body.set_hands(True)
+            self.assertEqual(body.slots, hand_slots())
+            body.set_hands(False)
+        self.assertEqual(body_layout(), original)  # No global layout mutation.
+
+    def test_dense_skeleton_slots_and_interactions_per_side(self):
+        from PySide2.QtTest import QTest
+        from rigflow.mapping.matcher import label_skeleton
+        from rigflow.mapping.model import JointMapping
+        from rigflow.skeleton.samples import build_skeleton, dense_spec
+        from rigflow.ui.qt import QtGui
+        clip = self.populated_clip()
+        dense = build_skeleton(dense_spec(), name="Dense humanoid")
+        self.controller.session.destination.rig.skeleton = dense
+        self.controller.session.rig.skeleton = dense
+        labels = label_skeleton(dense)
+        ignored = labels.ignored_joints()
+        for suffix in ("LeftArm_twist", "RightForeArm_roll", "Jaw", "LeftEye", "weapon_prop", "HeadTop_End"):
+            self.assertIn("dense:" + suffix, ignored)
+        self.controller.auto_map(clip.clip_id)
+        self.window.open_match(clip.clip_id)
+        self.window.resize(960, 640)
+        self.app.processEvents()
+        view = self.window.match_view
+        source, body = view.body_maps["source"], view.body_maps["destination"]
+        self.assertEqual(set(body.slots) - set(source.slots), {"Spine4", "Spine5", "Neck1"})
+        self.assertFalse(set(body.joints.values()) & set(ignored))
+        for role in ("Spine4", "Spine5", "Neck1"):
+            self.controller.selection = []
+            QTest.mouseClick(body, QtCore.Qt.LeftButton, pos=body.slot_position(role))
+            self.assertEqual(view.selection_role.full_text, role.replace("Spine", "Spine ").replace("Neck", "Neck "))
+            self.assertEqual(self.controller.selection, ["dense:" + role])
+            self.assertTrue(all(b.selected_role == role for b in view.body_maps.values()))
+            self.app.sendEvent(body, QtGui.QMouseEvent(QtCore.QEvent.MouseMove, body.slot_position(role), QtCore.Qt.NoButton, QtCore.Qt.NoButton, QtCore.Qt.NoModifier))
+            self.assertIn("\nOptional", body.toolTip())
+            self.assertIn("dense:" + role, body.toolTip())
+            def clear_from_menu():
+                menu = self.app.activePopupWidget()
+                menu.actions()[0].trigger()
+                menu.close()
+            QtCore.QTimer.singleShot(0, clear_from_menu)
+            QTest.mouseClick(body, QtCore.Qt.RightButton, pos=body.slot_position(role))
+            self.assertIsNone(clip.mapping.matches[role].destination)
+            self.assertIn(role, body.slots)  # Labeling keeps cleared slots visible.
+            self.controller.selection = []
+            QTest.mouseClick(body, QtCore.Qt.LeftButton, pos=body.slot_position(role))
+            self.assertEqual(view.waiting, role)
+            self.assertEqual(body.waiting, role)
+            self.controller.selection = ["dense:" + role]
+            view.poll_selection()
+            self.assertIsNone(view.waiting)
+            self.assertEqual(clip.mapping.matches[role].destination, "dense:" + role)
+            view.unmatch_button.click()
+            self.assertIsNone(clip.mapping.matches[role].destination)
+            self.assertFalse(view.unmatch_button.isEnabled())
+        # A role mapped manually on one side is visible there even without a
+        # labeling claim. Empty rows from the other side must not add slots.
+        clip.mapping = JointMapping()
+        clip.mapping.set_definition("Spine7", "source", "mixamorig:Spine2")
+        view.refresh()
+        self.assertIn("Spine7", source.slots)
+        self.assertNotIn("Spine7", body.slots)
+        self.controller.session.rig.skeleton = None
+        self.controller.session.destination.rig.skeleton = None
+        clip.mapping = JointMapping()
+        view.refresh()
+        self.assertNotIn("Neck1", body.slots)
 
     def test_missing_services_are_status_errors(self):
         from rigflow.ui.controller import Controller

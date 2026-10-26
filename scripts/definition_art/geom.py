@@ -124,6 +124,19 @@ BODY_HALF_D = [
 ]
 ARM_SPLAY = 0.05        # extra x per unit of y below the armpit (arm and hand only)
 
+# Extend the forearm along its original axis, keeping the elbow and the hand's
+# shape. The wrist moves from y=273 to 297; fingertips now reach mid-thigh.
+FOREARM_EXTENSION = (13.4, 24.0)
+_OUTER_FOREARM = BODY_HALF_D.index((322, 233.4))
+_HAND_START = BODY_HALF_D.index((339, 270))
+_HAND_END = BODY_HALF_D.index((317.2, 273.4))
+_INNER_ELBOW = BODY_HALF_D.index((281.6, 225))
+for _i in range(_OUTER_FOREARM, _INNER_ELBOW):
+    _p = BODY_HALF_D[_i]
+    _t = 1.0 if _HAND_START <= _i <= _HAND_END else min(1.0, max(0.0, (_p[1] - 225) / 48.0))
+    BODY_HALF_D[_i] = (_p[0] + FOREARM_EXTENSION[0] * _t,
+                       _p[1] + FOREARM_EXTENSION[1] * _t) + tuple(_p[2:])
+
 
 def _splay(p):
     return (p[0] + ARM_SPLAY * max(0.0, p[1] - 160.0),) + tuple(p[1:])
@@ -166,7 +179,8 @@ _BODY_JOINTS_D = {
     "Spine": (200, 233), "Hips": (200, 268),
 }
 _SIDE_JOINTS_D = {
-    "Shoulder": (221, 111), "Arm": (266.5, 136), "ForeArm": _splay((299.6, 225)), "Hand": _splay((326.4, 273)),
+    "Shoulder": (221, 111), "Arm": (266.5, 136), "ForeArm": _splay((299.6, 225)),
+    "Hand": _splay((326.4 + FOREARM_EXTENSION[0], 273 + FOREARM_EXTENSION[1])),
     "UpLeg": (228, 292), "Leg": (239, 436), "Foot": (243.8, 543), "ToeBase": (258, 579.5),
 }
 BODY_JOINTS = {k: B(*v) for k, v in _BODY_JOINTS_D.items()}
@@ -201,7 +215,7 @@ COL_TEXT_L, COL_BEND_L = 2 * CX - COL_TEXT_R, 2 * CX - COL_BEND_R
 # Label rows (label centre y), set by hand and checked by check_body_labels():
 # leaders as flat as possible, never crossing, clear of other joints.
 _ROWS_R = {"Head": 52, "Neck": 70, "Shoulder": 88, "Spine3": 106, "Arm": 146, "Spine2": 175,
-           "Spine1": 207, "ForeArm": 237, "Spine": 268, "Hand": 299, "Hips": 330, "UpLeg": 361,
+           "Spine1": 207, "ForeArm": 237, "Spine": 268, "Hips": 299, "Hand": 330, "UpLeg": 361,
            "Leg": 463, "Foot": 582, "ToeBase": 614}
 BODY_LABEL_ROWS = {}
 for _k, _v in _ROWS_R.items():

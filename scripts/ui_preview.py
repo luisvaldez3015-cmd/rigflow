@@ -51,10 +51,11 @@ def main(argv=None):
 
     def capture_map(name):
         app.processEvents()
-        path = output / (name + ".png")
-        if not window.match_view.body_map.grab().save(str(path), "PNG"):
-            raise RuntimeError("Could not save " + str(path))
-        print(str(path))
+        for side, body in window.match_view.body_maps.items():
+            path = output / (name + "_" + side + ".png")
+            if not body.grab().save(str(path), "PNG"):
+                raise RuntimeError("Could not save " + str(path))
+            print(str(path))
 
     capture("01_setup_empty")
     controller.add_model_from_file("mixamorig_walk.fbx")
@@ -68,6 +69,39 @@ def main(argv=None):
     controller.set_manual_match(clip.clip_id, match.role, match.source, match.destination)
     capture("04_match")
     capture_map("04_match_body_map")
+    view = window.match_view
+    controller.selection = []
+    view.click_slot("LeftHand", "destination")
+    capture("04_match_selected")
+    view.unmatch_button.click()
+    view.click_slot("LeftHand", "source")
+    capture("04_match_waiting")
+    controller.selection = ["mixamorig:LeftHand"]
+    view.poll_selection()
+    controller.selection = ["l_wrist_JNT"]
+    view.click_slot("LeftHand", "destination")
+    normal_size = window.size()
+    window.resize(960, 640)
+    capture("04_match_min")
+    view.map_tabs.setCurrentIndex(1)
+    capture("04_match_hands_min")
+    view.map_tabs.setCurrentIndex(0)
+    window.resize(normal_size)
+    from rigflow.skeleton.samples import build_skeleton, dense_spec
+    old_skeleton, old_mapping = controller.session.rig.skeleton, clip.mapping
+    dense = build_skeleton(dense_spec(), name="Dense humanoid")
+    controller.session.rig.skeleton = destination.rig.skeleton = dense
+    clip.mapping = None
+    controller.auto_map(clip.clip_id)
+    controller.selection = []
+    view.click_slot("Spine4", "destination")
+    capture("04_match_dense")
+    window.resize(960, 640)
+    capture("04_match_dense_min")
+    controller.session.rig.skeleton = destination.rig.skeleton = old_skeleton
+    clip.mapping = old_mapping
+    view.set_clip(clip.clip_id)
+    window.resize(normal_size)
     window.open_transfer(clip.clip_id)
     window.transfer_view._set_frame(24)
     capture("05_transfer")

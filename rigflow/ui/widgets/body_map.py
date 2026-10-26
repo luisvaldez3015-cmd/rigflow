@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import json
 import math
+from copy import deepcopy
 from pathlib import Path
 
-from rigflow.skeleton.roles import REQUIRED_ROLES, display_name
+from rigflow.skeleton.roles import REQUIRED_ROLES, display_name, parse_role, role_name
 from rigflow.ui.qt import QtCore, QtGui, QtWidgets, Signal, QtSvg
 
 
@@ -37,6 +38,50 @@ def hand_slots():
     return _positions("hands")
 
 
+def body_layout(roles=()):
+    """Independent body geometry for the roles present on one model.
+
+    Only canonical spine/neck roles change the template. Helpers and roles on
+    the other model cannot add slots here. Default spine slots remain available
+    even when the rig has fewer joints or a definition is cleared.
+    """
+    counts = {"Spine": 4, "Neck": 1}
+    for role in roles:
+        parsed = parse_role(role)
+        if parsed and parsed[1] in counts:
+            counts[parsed[1]] = max(counts[parsed[1]], parsed[2] + 1)
+    view = deepcopy(_LAYOUT["body"])
+    joints = view["joints"]
+    hips, chest, head = (dict(joints[r]) for r in ("Hips", "Spine3", "Head"))
+    for part, count in counts.items():
+        start, end = (hips, chest) if part == "Spine" else (chest, head)
+        template = dict(joints[part])
+        for i in range(count):
+            role = role_name(part, index=i)
+            t = (i + 1) / float(count if part == "Spine" else count + 1)
+            item = dict(template, x=start["x"] + (end["x"] - start["x"]) * t,
+                        y=start["y"] + (end["y"] - start["y"]) * t,
+                        required=role in REQUIRED_ROLES)
+            if count == (4 if part == "Spine" else 1):
+                item = dict(_LAYOUT["body"]["joints"][role])
+            if not item["required"]:
+                item["r"] = _LAYOUT["body"]["joints"]["Spine1"]["r"]
+            joints[role] = item
+            label = dict(view["labels"].get(role, view["labels"][part]))
+            leader = [list(p) for p in label["leader"]]
+            leader[-1] = [item["x"], item["y"]]
+            if count > (4 if part == "Spine" else 1):
+                label["y"] = item["y"]
+                leader[0][1] = leader[1][1] = item["y"]
+            view["labels"][role] = dict(label, text=display_name(role), leader=leader)
+    chain = (["Hips"] + [role_name("Spine", index=i) for i in range(counts["Spine"])] +
+             [role_name("Neck", index=i) for i in range(counts["Neck"])] + ["Head"])
+    view["bones"] = list(zip(chain, chain[1:])) + [
+        [role_name("Spine", index=counts["Spine"] - 1) if a == "Spine3" else a, b]
+        for a, b in view["bones"] if a not in chain or b not in chain]
+    return view
+
+
 def _qcolor(value, alpha=1.0):
     colour = QtGui.QColor(value)
     colour.setAlphaF(alpha)
@@ -57,15 +102,20 @@ class BodyMap(QtWidgets.QWidget):
 
     slot_clicked = Signal(str)
     slot_menu = Signal(str, object)
+    background_clicked = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, show_labels=True):
         super().__init__(parent)
+        self.show_labels = show_labels
         self.hands = False
         self.states, self.joints = {}, {}
         self.waiting = None
         self.hovered = None
+        self.selected_role = None
+        self._body_roles = frozenset()
+        self._body_layout = body_layout()
         self.setMouseTracking(True)
-        self.setMinimumSize(500, 250)
+        self.setMinimumSize(500 if show_labels else 330, 250)
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.setAccessibleName("Character definition body map")
         self._renderers = {}
@@ -75,7 +125,25 @@ class BodyMap(QtWidgets.QWidget):
 
     @property
     def slots(self):
-        return hand_slots() if self.hands else BODY_SLOTS
+        return {role: (item["x"], item["y"]) for role, item in self._view()["joints"].items()}
+
+    @property
+    def definition_roles(self):
+        return set(self._body_layout["joints"]) | set(hand_slots())
+
+    def set_roles(self, roles):
+        """Use this side's labeling and populated mapping roles for its chains."""
+        roles = frozenset(r for r in roles if r.startswith(("Spine", "Neck")))
+        if roles != self._body_roles:
+            self._body_roles = roles
+            self._body_layout = body_layout(roles)
+            if self.hovered not in self.slots:
+                self.hovered = None
+                self.setToolTip("")
+            self.update()
+
+    def _view(self):
+        return _LAYOUT["hands"] if self.hands else self._body_layout
 
     def set_hands(self, enabled):
         enabled = bool(enabled)
@@ -89,20 +157,50 @@ class BodyMap(QtWidgets.QWidget):
 
     def _transform(self):
         width, height = _LAYOUT["viewBox"][2], _LAYOUT["viewBox"][3]
+        left, top = 0.0, 0.0
+        if not self.show_labels:
+            # Fit the silhouette and joint padding, excluding the label columns.
+            joints = _LAYOUT[self._view_name()]["joints"].values()
+            left = max(0, min(j["x"] - j["r"] for j in joints) - 55)
+            right = min(width, max(j["x"] + j["r"] for j in joints) + 55)
+            top = max(0, min(j["y"] - j["r"] for j in joints) - 55)
+            bottom = min(height, max(j["y"] + j["r"] for j in joints) + 55)
+            width, height = right - left, bottom - top
         scale = min(self.width() / float(width), self.height() / float(height))
-        return scale, (self.width() - width * scale) / 2.0, (self.height() - height * scale) / 2.0
+        return scale, (self.width() - width * scale) / 2.0 - left * scale, (self.height() - height * scale) / 2.0 - top * scale
 
     def _screen_point(self, role):
         scale, ox, oy = self._transform()
-        item = _LAYOUT[self._view_name()]["joints"][role]
+        item = self._view()["joints"][role]
         return QtCore.QPointF(ox + item["x"] * scale, oy + item["y"] * scale)
 
     def _radius(self, role, scale=None):
         view = self._view_name()
         scale = self._transform()[0] if scale is None else scale
-        item = _LAYOUT[view]["joints"][role]
+        item = self._view()["joints"][role]
         minima = _LAYOUT["style"]["jointMinRadiusPx"][view]
-        return max(float(minima["required" if item.get("required") else "optional"]), item["r"] * scale)
+        radius = max(float(minima["required" if item.get("required") else "optional"]), item["r"] * scale)
+        clearance = self._chain_clearance(role, scale)
+        return min(radius, clearance * 0.30) if clearance is not None else radius
+
+    def _chain_clearance(self, role, scale):
+        if self.hands or not (role in ("Hips", "Head") or role.startswith(("Spine", "Neck"))):
+            return None
+        return self._slot_clearance(role, scale)
+
+    def _slot_clearance(self, role, scale):
+        if self.hands:
+            return None
+        items = self._view()["joints"]
+        item = items[role]
+        return min(math.hypot(item["x"] - other["x"], item["y"] - other["y"]) * scale
+                   for name, other in items.items() if name != role)
+
+    def _hit_radius(self, role, scale=None):
+        scale = self._transform()[0] if scale is None else scale
+        radius = max(self._radius(role, scale) + 4.0, 10.0)
+        clearance = self._slot_clearance(role, scale)
+        return min(radius, clearance * 0.46) if clearance is not None else radius
 
     def slot_position(self, role):
         point = self._screen_point(role)
@@ -111,9 +209,10 @@ class BodyMap(QtWidgets.QWidget):
     def role_at(self, position):
         point = QtCore.QPointF(position)
         scale = self._transform()[0]
-        for role in self.slots:
+        # At small sizes nearby slots have overlapping hit areas; choose nearest.
+        for role in sorted(self.slots, key=lambda r: (self._screen_point(r).x() - point.x()) ** 2 + (self._screen_point(r).y() - point.y()) ** 2):
             centre = self._screen_point(role)
-            hit = max(self._radius(role, scale) + 4.0, 10.0)
+            hit = self._hit_radius(role, scale)
             if (centre.x() - point.x()) ** 2 + (centre.y() - point.y()) ** 2 <= hit * hit:
                 return role
         return None
@@ -125,6 +224,8 @@ class BodyMap(QtWidgets.QWidget):
                 self.slot_menu.emit(role, event.globalPos())
             elif event.button() == QtCore.Qt.LeftButton:
                 self.slot_clicked.emit(role)
+        elif event.button() == QtCore.Qt.LeftButton:
+            self.background_clicked.emit()
         event.accept()
 
     def mouseMoveEvent(self, event):
@@ -133,11 +234,10 @@ class BodyMap(QtWidgets.QWidget):
             self.hovered = role
             self.setCursor(QtCore.Qt.PointingHandCursor if role else QtCore.Qt.ArrowCursor)
             if role:
-                required = _LAYOUT[self._view_name()]["joints"][role].get("required", False)
+                required = self._view()["joints"][role].get("required", False)
                 status = "Required" if required or role in REQUIRED_ROLES else "Optional"
                 self.setToolTip("{} · {}\n{}".format(
-                    display_name(role), status,
-                    self.joints.get(role) or "Click, then select a joint in Maya"))
+                    display_name(role).replace("Fore Arm", "Forearm"), self.joints.get(role) or "not connected", status))
             else:
                 self.setToolTip("")
             self.update()
@@ -174,7 +274,7 @@ class BodyMap(QtWidgets.QWidget):
         return QtGui.QPolygonF(points)
 
     def _state(self, role):
-        view = _LAYOUT[self._view_name()]
+        view = self._view()
         if role == self.waiting:
             return "waiting"
         return self.states.get(role, "required" if view["joints"][role].get("required") else "empty")
@@ -206,16 +306,19 @@ class BodyMap(QtWidgets.QWidget):
     def _draw_joint(self, painter, role, centre, radius, state):
         style = _LAYOUT["style"]["joint"][state]
         x, y = centre.x(), centre.y()
+        clearance = self._chain_clearance(role, self._transform()[0])
+        halo = min(3.2, max(0.0, clearance * 0.46 - radius)) if clearance is not None else 3.2
         if state == "waiting":
-            glow = QtGui.QRadialGradient(centre, radius + 9.0)
-            glow.setColorAt(radius / (radius + 9.0), _qcolor("#23b7db", 0.55))
+            glow_size = min(9.0, halo * 2) if clearance is not None else 9.0
+            glow = QtGui.QRadialGradient(centre, radius + glow_size)
+            glow.setColorAt(radius / (radius + glow_size), _qcolor("#23b7db", 0.55))
             glow.setColorAt(1.0, _qcolor("#23b7db", 0.0))
             painter.setPen(QtCore.Qt.NoPen)
             painter.setBrush(glow)
-            painter.drawEllipse(centre, radius + 9.0, radius + 9.0)
+            painter.drawEllipse(centre, radius + glow_size, radius + glow_size)
             painter.setBrush(QtCore.Qt.NoBrush)
             painter.setPen(QtGui.QPen(_qcolor("#4cc8e6", 0.95), 1.3))
-            painter.drawEllipse(centre, radius + 4.0, radius + 4.0)
+            painter.drawEllipse(centre, radius + halo, radius + halo)
         draw_radius = radius * 1.12 if role == self.hovered else radius
         painter.setPen(QtCore.Qt.NoPen)
         painter.setBrush(_qcolor("#16191b", 0.55))
@@ -240,7 +343,11 @@ class BodyMap(QtWidgets.QWidget):
         if role == self.hovered:
             painter.setBrush(QtCore.Qt.NoBrush)
             painter.setPen(QtGui.QPen(_qcolor("#ffffff", 0.85), 1.3))
-            painter.drawEllipse(centre, draw_radius + 3.2, draw_radius + 3.2)
+            painter.drawEllipse(centre, radius + halo, radius + halo)
+        if role == self.selected_role:
+            painter.setBrush(QtCore.Qt.NoBrush)
+            painter.setPen(QtGui.QPen(_qcolor("#23b7db"), 1.3))
+            painter.drawEllipse(centre, radius + halo, radius + halo)
         if self.hands and role[-1:].isdigit() and draw_radius >= 7.5:
             font = _font(_LAYOUT["style"]["label"], max(8, int(draw_radius * 1.05)), QtGui.QFont.DemiBold)
             painter.setFont(font)
@@ -260,7 +367,7 @@ class BodyMap(QtWidgets.QWidget):
 
     def _visible_labels(self, scale):
         """Share label visibility and compact anchors with their leaders."""
-        for role, data in _LAYOUT[self._view_name()].get("labels", {}).items():
+        for role, data in self._view().get("labels", {}).items():
             if scale < data.get("minScale", 0):
                 continue
             compact = data.get("compact")
@@ -268,7 +375,7 @@ class BodyMap(QtWidgets.QWidget):
             yield role, anchor
 
     def _label_style(self, role):
-        view = _LAYOUT[self._view_name()]
+        view = self._view()
         style = _LAYOUT["style"]["label"]
         required = self.hands or view["joints"].get(role, {}).get("required", False) or role in REQUIRED_ROLES
         colour = style["required"] if required else style["optional"]
@@ -295,7 +402,7 @@ class BodyMap(QtWidgets.QWidget):
                 QtCore.QPointF(ox + x * scale, oy + y * scale) for x, y in points]))
 
     def _draw_labels(self, painter, scale, ox, oy):
-        view = _LAYOUT[self._view_name()]
+        view = self._view()
         label_style = _LAYOUT["style"]["label"]
         for role, anchor in self._visible_labels(scale):
             size, colour = self._label_style(role)
@@ -324,11 +431,12 @@ class BodyMap(QtWidgets.QWidget):
         painter.setRenderHint(QtGui.QPainter.TextAntialiasing)
         painter.setRenderHint(QtGui.QPainter.SmoothPixmapTransform)
         view_name = self._view_name()
-        view = _LAYOUT[view_name]
+        view = self._view()
         scale, ox, oy = self._transform()
         target = QtCore.QRectF(ox, oy, _LAYOUT["viewBox"][2] * scale, _LAYOUT["viewBox"][3] * scale)
         self._renderers[view_name].render(painter, target)
-        self._draw_leaders(painter, scale, ox, oy)
+        if self.show_labels:
+            self._draw_leaders(painter, scale, ox, oy)
         centres = {role: self._screen_point(role) for role in view["joints"]}
         radii = {role: self._radius(role, scale) for role in view["joints"]}
         for parent, child in view.get("bones", []):
@@ -340,5 +448,11 @@ class BodyMap(QtWidgets.QWidget):
                 self._draw_joint(painter, role, centres[role], radii[role], self._state(role))
         if waiting in centres:
             self._draw_joint(painter, waiting, centres[waiting], radii[waiting], "waiting")
-        self._draw_labels(painter, scale, ox, oy)
+        if self.show_labels:
+            self._draw_labels(painter, scale, ox, oy)
+        else:
+            painter.setFont(_font(_LAYOUT["style"]["label"], 10))
+            painter.setPen(_qcolor("#a0a0a0"))
+            painter.drawText(QtCore.QRectF(12, 10, 20, 16), QtCore.Qt.AlignCenter, "R")
+            painter.drawText(QtCore.QRectF(self.width() - 32, 10, 20, 16), QtCore.Qt.AlignCenter, "L")
         painter.end()

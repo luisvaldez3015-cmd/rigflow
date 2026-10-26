@@ -312,15 +312,26 @@ UI (`rigflow/ui`):
   `open_match(clip_id)`, `open_transfer(clip_id)`, `show_setup()`, `new_animation()` (back to
   Setup and replace the source model from a file), `validate_active()` kept for scripts.
   `add_menu`: "From file…", "Use Maya selection", "From scene…" (picker over `list_scene_candidates()`).
-- Match model toggles use session model labels, preserving Setup identity on swap.
+- Match panel headers use session model labels, preserving Setup identity on swap.
 
-## Contract: character definitions (Match redesign, 2026-10-23)
+## Contract: character definitions (Match v3b, 2026-10-25)
 
 - `MatchingView` renders `JointMapping`: source and destination are independent
-  definitions, presented as Model A/B in the default transfer direction.
+  definitions, presented in equal-width side-by-side panels with active headers
+  and per-model required-role counts. `body_maps["source"/"destination"]` contain
+  `BodyMap(show_labels=False)`: no leaders, labels or column headings; the shared
+  paint/hit transform fits joint bounds plus silhouette padding, retaining R/L
+  hints. The optional label mode and public slot API remain supported; `body_map`
+  is a compatibility property for the active map.
   `BodyMap` paints Body and Hands (five fingers × three phalanges); slots expose
   `slot_position(role)` and `role_at(point)` for the same hit-testing used by tests.
-  The silhouettes and all map geometry/style data ship in `assets/definition/`;
+  `set_roles()` builds independent body geometry from that side's labeling plus
+  populated mapping roles. `body_layout()` keeps at least four spine slots and
+  one neck slot, redistributes longer chains through Spine9 / Neck9 and connects
+  shoulders to the last spine. `definition_roles` includes body and hands even
+  when Hands is shown. Radius, hit area and highlight padding are capped by
+  neighbouring chain spacing; ignored helper joints never add body slots.
+  The silhouettes and default map geometry/style data ship in `assets/definition/`;
   `scripts/definition_art/` is the reproducible source for those assets and
   writes reference mockups to a temporary output directory.
 - `JointMapping.set_definition(role, side, joint)` edits one side and moves any
@@ -328,7 +339,22 @@ UI (`rigflow/ui`):
   of each `manual` pair are locked. `build_mapping` preserves those overrides
   while recomputing the other side. JSON presets keep version 1 and add optional
   `manual_sides`; older pair overrides still lock both sides. Explicit single-slot
-  clears persist across Auto-detect. Clear all resets the active side's overrides.
+  clears persist across Auto-match. The confirmed Clear Model A/B menu actions
+  reset only that model's overrides; Unmatch calls set_definition for the selected
+  role on both sides, preserving explicit empty overrides.
+- The 160 px centre column owns Auto-match / Unmatch, one Body/Hands switch,
+  elided Selection labels with full tooltips, aggregate Connected/Review/Missing
+  counts, Bones/Mesh/Both (default Both), and the presets/clear menu. Connected
+  counts assigned roles including optional ones across both models; Review
+  includes automatic guesses and invalid definitions; Missing counts required
+  empty roles only. No top toolbar or Details widget exists. Each map retains
+  at least 330 px width at the 960×640 minimum.
+- `selected_role` is shared across both maps (thin cyan ring); `waiting` belongs
+  to the active map only. Slot clicks activate that side before applying current
+  Maya selection; background/header clicks activate and cancel waiting. The
+  BodyMap `background_clicked` signal handles its empty area. Right-click Clear
+  affects only the originating side. Long header and selection names use
+  `ElidedLabel`, with full text in the tooltip.
 - `mapping.definition` supplies pure per-side progress and slot states. Progress
   counts the existing 15 `REQUIRED_ROLES`; optional roles never gate transfer.
   All required slots on both sides plus `validate().ok` gate Transfer.

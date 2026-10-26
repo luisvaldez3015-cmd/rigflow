@@ -46,6 +46,27 @@ class DefinitionArtTests(unittest.TestCase):
                 self.assertEqual(leader[-1], [joint["x"], joint["y"]])
         self.assertTrue(all("leader" not in label for label in self.layout["hands"]["labels"].values()))
 
+    def test_forearm_proportions_and_mirrored_clearance(self):
+        from scripts.definition_art import geom
+        self.assertEqual(geom.check_body_labels(), [])
+        joints = self.layout["body"]["joints"]
+        def point(part):
+            j = joints["Left" + part]
+            return ((j["x"] - geom.BOX) / geom.BK, (j["y"] - geom.BOY) / geom.BK)
+        arm, elbow, wrist = (point(p) for p in ("Arm", "ForeArm", "Hand"))
+        length = lambda a, b: math.hypot(a[0] - b[0], a[1] - b[1])
+        self.assertTrue(0.82 < length(elbow, wrist) / length(arm, elbow) < 0.89)
+        self.assertTrue(222 <= elbow[1] <= 228)
+        self.assertTrue(295 <= wrist[1] <= 300)
+        hand = geom.BODY_HALF_D[geom._HAND_START:geom._HAND_END + 1]
+        self.assertTrue(348 <= max(p[1] for p in hand) <= 360)
+        thigh = [p for p in geom.BODY_HALF_D[geom._INNER_ELBOW:] if 290 <= p[1] <= 365]
+        self.assertGreater(min(p[0] for p in hand) - max(p[0] for p in thigh), 45)
+        for part in SIDE_PARTS:
+            left, right = joints["Left" + part], joints["Right" + part]
+            self.assertAlmostEqual(left["x"] + right["x"], 1000, places=2)
+            self.assertEqual(left["y"], right["y"])
+
 
 if __name__ == "__main__":
     unittest.main()

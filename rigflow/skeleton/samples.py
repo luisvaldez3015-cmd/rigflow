@@ -103,6 +103,30 @@ def mixamo_mirrored_spec() -> Spec:
     return [(n, par, (-x, y, z)) for n, par, (x, y, z) in mixamo_spec()]
 
 
+def dense_spec(prefix: str = "dense:") -> Spec:
+    """Six spines, two necks, fingers and ignored twist/face/prop/end joints."""
+    p = prefix
+    spec: Spec = [(p + "Hips", "", (0, 100, 0))]
+    parent = p + "Hips"
+    for i in range(6):
+        name = p + ("Spine" if i == 0 else "Spine" + str(i))
+        spec.append((name, parent, (0, 106 + i * 8, 0)))
+        parent = name
+    spec += [(p + "Neck", parent, (0, 152, 0)),
+             (p + "Neck1", p + "Neck", (0, 158, 0)),
+             (p + "Head", p + "Neck1", (0, 166, 0))]
+    for name, parent, pos in mixamo_spec(prefix=p):
+        if name in {p + n for n in ("Hips", "Spine", "Spine1", "Spine2", "Neck", "Head")}:
+            continue
+        spec.append((name, p + "Spine5" if parent == p + "Spine2" else parent, pos))
+    spec += [(p + "LeftArm_twist", p + "LeftArm", (30, 148, 0)),
+             (p + "RightForeArm_roll", p + "RightForeArm", (-60, 148, 0)),
+             (p + "Jaw", p + "Head", (0, 161, 5)),
+             (p + "LeftEye", p + "Head", (3, 169, 7)),
+             (p + "weapon_prop", p + "LeftHand", (76, 148, 5))]
+    return spec
+
+
 def nameless_spec() -> Spec:
     """Mixamo topology with meaningless joint names (fingers and ends removed)."""
     spec = mixamo_spec(prefix="", fingers=False, ends=False)
@@ -250,4 +274,5 @@ SAMPLES = {
     "advanced_skeleton": advanced_skeleton_spec,
     "custom": custom_spec,
     "nameless": nameless_spec,
+    "dense": dense_spec,
 }

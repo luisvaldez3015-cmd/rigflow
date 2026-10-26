@@ -52,25 +52,39 @@ skeletons go; optional joints without a counterpart are skipped during transfer.
 Required roles (Hips, Spine, Head, both arms with forearm and hand, both legs
 with shin and foot) can never be excluded and must be complete on both sides.
 
+Each panel follows its own skeleton's spine and neck chains, up to **Spine 9**
+and **Neck 9**. A model with six spine joints and two neck joints shows
+**Spine…Spine 5** and **Neck, Neck 1**, even when the other model has fewer.
+The map keeps at least four spine slots and one neck slot; longer chains are
+spaced evenly, with smaller dots and distinct click areas. Extra slots are
+optional and support the same selection, Clear and Unmatch actions. Cleared
+slots remain visible when their roles are detected in that skeleton.
+Twist/roll helpers, facial joints, props and end tips stay hidden.
+
 ## Correcting a match by hand
 
 In the **Match** step:
 
-1. Choose **Model A** or **Model B**. Maya's main viewport isolates that model;
-   **Bones / Mesh / Both** changes its display, with joint X-ray enabled.
+1. Click a slot or empty space in either side-by-side model panel. Its header
+   highlights and Maya's main viewport isolates that model; **Bones / Mesh / Both**
+   in the centre column changes its display, with joint X-ray enabled.
 2. Click an empty slot on **Body** or **Hands**, then select that joint in Maya.
    The slot turns green. Esc or clicking it again cancels waiting.
-3. Repeat for the other model. The counters track the 15 required body roles.
+3. Repeat for the other model. The selected role highlights on both maps and
+   the centre Selection block shows both joints. Header counters track the 15
+   required body roles. One **Body / Hands** switch controls both maps. Hover
+   any slot for its role, joint and required/optional status.
 
 You may select one joint first, then click its slot. Clicking an assigned slot
 selects its scene joint; right-click **Clear** before a slot-first replacement.
 A reused joint moves from its old role. Joints from the other model warn instead
 of assigning. Manual edits affect only the chosen model.
 
-**Auto-detect** preserves manual assignments and individual clears. **Clear all**
-confirms and resets the active definition so Auto-detect can start it again.
-Use **… → Save preset… / Load preset…** for the next animation between the same
-two skeletons. Leaving Match restores the previous main viewport and camera.
+**Unmatch** clears the selected role on both models; right-click **Clear**
+affects just that panel. **Auto-match** preserves manual assignments and
+individual clears. **… → Clear Model A / Clear Model B** confirms and resets
+only that model so Auto-match can start it again. Use **… → Save preset… /
+Load preset…** for the next animation between the same two skeletons. Leaving Match restores the previous main viewport and camera.
 
 ## Validation
 
